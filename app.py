@@ -15,7 +15,7 @@ def load_data(ws):
         return pd.DataFrame()
 
 # 2. 사이드바
-st.sidebar.title("logo.png 현대다이텍 시스템")
+st.logo("logo.png")
 
 if st.sidebar.button("🔄 시스템 새로고침 (오류 해결)"):
     st.cache_data.clear()
