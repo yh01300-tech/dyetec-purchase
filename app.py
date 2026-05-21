@@ -28,11 +28,10 @@ if st.sidebar.button("🔄 시스템 새로고침 (오류 해결)"):
     st.cache_data.clear()
     st.rerun()
 
-# 💡 첫 번째 메뉴로 '종합 대시보드'가 추가되었습니다.
 menu_choice = st.sidebar.radio("메뉴 선택", ("종합 대시보드", "매입 자료 입력", "거래처 등록", "품목 등록", "단가변동이력", "거래처별 내역"))
 
 # ==========================================
-# 💡 1. 종합 대시보드 (신규 기능)
+# 1. 종합 대시보드
 # ==========================================
 if menu_choice == "종합 대시보드":
     st.title("📊 월간 매입 종합 대시보드")
@@ -41,7 +40,6 @@ if menu_choice == "종합 대시보드":
     if df.empty or '매입일자' not in df.columns or '총액' not in df.columns:
         st.info("📈 매입 데이터가 충분히 누적되면 대시보드가 자동으로 생성됩니다.")
     else:
-        # 데이터 안전하게 변환
         df['매입일자_dt'] = pd.to_datetime(df['매입일자'], errors='coerce')
         df['총액'] = pd.to_numeric(df['총액'], errors='coerce').fillna(0)
         valid_df = df.dropna(subset=['매입일자_dt'])
@@ -49,7 +47,6 @@ if menu_choice == "종합 대시보드":
         if valid_df.empty:
             st.info("유효한 날짜 데이터가 없습니다.")
         else:
-            # 날짜 기준 설정 (이번 달, 지난 달)
             today = date.today()
             this_month = today.month
             this_year = today.year
@@ -61,7 +58,6 @@ if menu_choice == "종합 대시보드":
                 last_month = this_month - 1
                 last_month_year = this_year
             
-            # 데이터 분류
             curr_df = valid_df[(valid_df['매입일자_dt'].dt.year == this_year) & (valid_df['매입일자_dt'].dt.month == this_month)]
             prev_df = valid_df[(valid_df['매입일자_dt'].dt.year == last_month_year) & (valid_df['매입일자_dt'].dt.month == last_month)]
             
@@ -69,7 +65,6 @@ if menu_choice == "종합 대시보드":
             prev_total = prev_df['총액'].sum()
             diff = curr_total - prev_total
             
-            # 상단 핵심 요약 (Metric)
             st.subheader(f"🗓️ {this_year}년 {this_month}월 매입 요약")
             c1, c2, c3 = st.columns(3)
             
@@ -81,13 +76,11 @@ if menu_choice == "종합 대시보드":
                 top_vendor = curr_df.groupby('거래처')['총액'].sum().idxmax() if not curr_df.empty else "데이터 없음"
                 st.metric(label="최다 매입 거래처", value=str(top_vendor))
             
-            st.divider() # 시각적 구분선
+            st.divider()
             
-            # 하단 그래프
             st.subheader(f"🏆 {this_month}월 거래처별 매입 비중 (단위: 원)")
             if not curr_df.empty and '거래처' in curr_df.columns:
                 vendor_totals = curr_df.groupby('거래처')['총액'].sum().reset_index()
-                # 거래처명을 인덱스로 설정하여 깔끔한 바 차트 생성
                 st.bar_chart(vendor_totals.set_index('거래처'))
             else:
                 st.info("이번 달 등록된 매입 내역이 없어 그래프를 표시할 수 없습니다.")
@@ -114,4 +107,15 @@ elif menu_choice == "매입 자료 입력":
         base_p = df_i[df_i['제품명'] == item]['단가'].values[0] if not df_i.empty and item in df_i['제품명'].values else 0
         final_p = item_price_map.get(item, base_p)
         qty = st.number_input("수량", min_value=1)
-        price = st.number_input("단가", value=int(final_p), min_value=0, key=f"p
+        price = st.number_input("단가", value=int(final_p), min_value=0, key=f"p_{item}")
+        remarks = st.text_input("비고")
+
+    if st.button("✅ 입력 완료"):
+        df_p = load_data("매입자료")
+        new_row = {"매입일자": str(date_input), "거래처": vendor, "품목명": item, "수량": qty, "단가": price, "총액": qty*price, "비고": remarks}
+        updated = pd.concat([df_p, pd.DataFrame([new_row])], ignore_index=True)
+        conn.update(worksheet="매입자료", data=updated)
+        st.cache_data.clear(); st.rerun()
+    
+    st.subheader("📊 누적 매입 내역")
+    df_p = load_data("매입자료
