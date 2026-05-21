@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
+from datetime import date
 from streamlit_gsheets import GSheetsConnection
 
 # --- 웹사이트 기본 설정 ---
 st.set_page_config(page_title="현대다이텍 업무 관리 시스템", layout="wide")
-
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 st.sidebar.title("📌 메인 메뉴")
@@ -24,17 +24,16 @@ if menu_choice == "거래처 등록":
         submitted = st.form_submit_button("거래처 저장하기")
         
     if submitted and vendor_name:
-        existing_data = conn.read(worksheet="거래처")
+        existing_data = conn.read(worksheet="거래처", ttl=0)
         new_data = pd.DataFrame([{"거래처명": vendor_name, "사업자등록번호": biz_no, "연락처": contact, "팩스번호": fax, "비고": remarks}])
         conn.update(worksheet="거래처", data=pd.concat([existing_data, new_data], ignore_index=True))
         st.success("✅ 저장되었습니다.")
         st.rerun()
-
     st.subheader("📋 등록된 거래처 목록")
-    st.dataframe(conn.read(worksheet="거래처"), use_container_width=True)
+    st.dataframe(conn.read(worksheet="거래처", ttl=0), use_container_width=True)
 
 # ==========================================
-# 2. 품목 등록
+# 2. 품목 등록 (단가 이력 자동 기록)
 # ==========================================
 elif menu_choice == "품목 등록":
     st.title("📦 신규 품목 등록")
@@ -44,35 +43,47 @@ elif menu_choice == "품목 등록":
         submitted = st.form_submit_button("품목 저장하기")
         
     if submitted and item_name:
-        existing_data = conn.read(worksheet="품목")
-        new_data = pd.DataFrame([{"제품명": item_name, "단가": unit_price}])
-        conn.update(worksheet="품목", data=pd.concat([existing_data, new_data], ignore_index=True))
-        st.success("✅ 저장되었습니다.")
+        # 1. 품목 시트 업데이트
+        df_items = conn.read(worksheet="품목", ttl=0)
+        new_item = pd.DataFrame([{"제품명": item_name, "단가": unit_price}])
+        if item_name in df_items['제품명'].values:
+            df_items.loc[df_items['제품명'] == item_name, '단가'] = unit_price
+        else:
+            df_items = pd.concat([df_items, new_item], ignore_index=True)
+        conn.update(worksheet="품목", data=df_items)
+        
+        # 2. 단가이력 시트 기록
+        df_history = conn.read(worksheet="단가이력", ttl=0)
+        new_history = pd.DataFrame([{"품목명": item_name, "단가": unit_price, "변경일자": str(date.today())}])
+        conn.update(worksheet="단가이력", data=pd.concat([df_history, new_history], ignore_index=True))
+        
+        st.success("✅ 품목 등록 및 단가 이력 기록 완료!")
         st.rerun()
 
     st.subheader("📋 등록된 품목 목록")
-    st.dataframe(conn.read(worksheet="품목"), use_container_width=True)
+    st.dataframe(conn.read(worksheet="품목", ttl=0), use_container_width=True)
 
 # ==========================================
-# 3. 매입 자료 입력 (최종 완성본)
+# 3. 매입 자료 입력 (최신 단가 자동 불러오기)
 # ==========================================
 elif menu_choice == "매입 자료 입력":
     st.title("📝 원부자재 매입 내역 등록")
     
-    # 1. 데이터 불러오기
     df_vendors = conn.read(worksheet="거래처", ttl=0)
     df_items = conn.read(worksheet="품목", ttl=0)
-    item_price_map = dict(zip(df_items['제품명'], df_items['단가']))
+    # 최신 단가 불러오기 로직
+    df_history = conn.read(worksheet="단가이력", ttl=0)
+    df_history['변경일자'] = pd.to_datetime(df_history['변경일자'])
+    latest_prices = df_history.sort_values('변경일자').groupby('품목명').tail(1)
+    item_price_map = dict(zip(latest_prices['품목명'], latest_prices['단가']))
 
-    # 2. 품목 선택 (폼 바깥)
     col1, col2 = st.columns(2)
     with col1:
-        date = st.date_input("매입 일자")
+        date_input = st.date_input("매입 일자")
         vendor = st.selectbox("매입 거래처", df_vendors['거래처명'].tolist())
         selected_item = st.selectbox("품목명", df_items['제품명'].tolist())
         default_price = item_price_map.get(selected_item, 0)
     
-    # 3. 폼 시작
     with st.form("purchase_form", clear_on_submit=True):
         col3, col4 = st.columns(2)
         with col3:
@@ -82,28 +93,17 @@ elif menu_choice == "매입 자료 입력":
             remarks = st.text_input("비고")
             submit = st.form_submit_button("입력 완료")
 
-    # 4. 저장 로직 (폼 바깥)
     if submit:
         total_price = qty * price
         existing_data = conn.read(worksheet="매입자료", ttl=0)
-        
-        # 새로운 행 생성
-        new_row = pd.DataFrame([{
-            "매입일자": str(date), "거래처": vendor, "품목명": selected_item, 
-            "수량": qty, "단가": price, "총액": total_price, "비고": remarks
-        }])
-        
-        # 기존 데이터 열 순서에 강제로 맞춤
+        new_row = pd.DataFrame([{"매입일자": str(date_input), "거래처": vendor, "품목명": selected_item, 
+                                 "수량": qty, "단가": price, "총액": total_price, "비고": remarks}])
         new_row = new_row[existing_data.columns]
-        
-        # 데이터 합치기 및 저장
         updated_df = pd.concat([existing_data, new_row], ignore_index=True)
         conn.update(worksheet="매입자료", data=updated_df)
-        
         st.success(f"✅ 저장 완료! (총액: {total_price:,}원)")
         st.rerun()
 
-    # 5. 목록 표시 (오타 수정됨)
     st.subheader("📊 누적 매입 내역")
     st.dataframe(conn.read(worksheet="매입자료", ttl=0), use_container_width=True)
 
@@ -112,37 +112,21 @@ elif menu_choice == "매입 자료 입력":
 # ==========================================
 elif menu_choice == "거래처별 내역":
     st.title("🔍 기간 및 거래처별 내역 조회")
-    
-    # 1. 데이터 불러오기
     df = conn.read(worksheet="매입자료", ttl=0)
-    
     if df.empty:
         st.warning("데이터가 없습니다.")
     else:
-        # 2. '매입일자' 열을 날짜 형식으로 변환 (비교를 위해 필수!)
         df['매입일자'] = pd.to_datetime(df['매입일자'])
-        
-        # 3. 기간 선택 (사이드바 혹은 위쪽에 배치)
         col_a, col_b = st.columns(2)
-        with col_a:
-            start_date = st.date_input("시작일", value=df['매입일자'].min())
-        with col_b:
-            end_date = st.date_input("종료일", value=df['매입일자'].max())
+        with col_a: start_date = st.date_input("시작일", value=df['매입일자'].min())
+        with col_b: end_date = st.date_input("종료일", value=df['매입일자'].max())
             
-        # 4. 거래처 선택
         vendor_list = df['거래처'].unique().tolist()
-        selected_vendor = st.selectbox("조회할 거래처를 선택하십시오.", vendor_list)
+        selected_vendor = st.selectbox("조회할 거래처 선택", vendor_list)
         
-        # 5. 필터링 (기간 + 거래처)
-        mask = (df['매입일자'].dt.date >= start_date) & \
-               (df['매입일자'].dt.date <= end_date) & \
-               (df['거래처'] == selected_vendor)
+        mask = (df['매입일자'].dt.date >= start_date) & (df['매입일자'].dt.date <= end_date) & (df['거래처'] == selected_vendor)
         filtered_df = df[mask]
         
-        # 6. 결과 표시
-        st.subheader(f"🏢 [{selected_vendor}] {start_date} ~ {end_date} 상세 내역")
+        st.subheader(f"🏢 [{selected_vendor}] 상세 내역")
         st.dataframe(filtered_df, use_container_width=True)
-        
-        # 7. 총액 집계
-        total_sum = filtered_df['총액'].sum()
-        st.metric(label="선택 기간 총 매입액", value=f"{total_sum:,} 원")
+        st.metric(label="선택 기간 총 매입액", value=f"{filtered_df['총액'].sum():,} 원")
