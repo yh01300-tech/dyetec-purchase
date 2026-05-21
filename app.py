@@ -90,21 +90,24 @@ elif menu_choice == "매입 자료 입력":
     # 4. 저장 로직
     if submit:
         total_price = qty * price
+        
+        # 기존 데이터를 다시 확실하게 불러옵니다.
+        existing_data = conn.read(worksheet="매입자료")
+        
+        # 새로운 데이터 행 생성
         new_row = pd.DataFrame([{
-            "매입일자": str(date), 
-            "거래처": vendor, 
-            "품목명": selected_item, 
-            "수량": qty, 
-            "단가": price, 
-            "총액": total_price, 
-            "비고": remarks
+            "매입일자": str(date), "거래처": vendor, "품목명": selected_item, 
+            "수량": qty, "단가": price, "총액": total_price, "비고": remarks
         }])
         
-        existing_data = conn.read(worksheet="매입자료")
-        conn.update(worksheet="매입자료", data=pd.concat([existing_data, new_row], ignore_index=True))
+        # 기존 데이터와 새 데이터를 안전하게 합치기
+        updated_df = pd.concat([existing_data, new_row], ignore_index=True)
         
-        st.success(f"✅ 저장 완료! (이번 입력 건 총액: **{total_price:,}원**)")
-
+        # 전체 데이터로 덮어쓰기
+        conn.update(worksheet="매입자료", data=updated_df)
+        
+        st.success(f"✅ 저장 완료! (총액: {total_price:,}원)")
+    
     # 5. 목록 표시
     st.subheader("📊 누적 매입 내역")
     st.dataframe(conn.read(worksheet="매입자료"), use_container_width=True)
