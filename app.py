@@ -9,29 +9,24 @@ from streamlit_gsheets import GSheetsConnection
 st.set_page_config(page_title="현대다이텍 시스템", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 💡 윈도우 인쇄(Ctrl+P) 시 사이드바와 버튼들을 자동으로 숨겨주는 마법의 코드입니다.
 st.markdown("""
     <style>
     @media print {
-        /* 사이드바 메뉴 전체 숨기기 */
         [data-testid="stSidebar"] {
             display: none !important;
         }
-        /* 웹사이트 상단 여백 및 헤더 숨기기 */
         header {
             visibility: hidden !important;
         }
-        /* 시스템 버튼들 숨기기 (새로고침 등) */
         .stButton {
             display: none !important;
         }
-        /* 본문 내용이 종이에 꽉 차게 조절 */
         .main .block-container {
             padding-top: 2rem !important;
             padding-bottom: 2rem !important;
             max-width: 100% !important;
+            }
         }
-    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -223,10 +218,10 @@ elif menu_choice == "단가변동이력":
     else: st.info("아직 변경된 단가 이력이 없습니다.")
 
 # ==========================================
-# 6. 거래처별 내역
+# 💡 6. 거래처별 내역 (품목 선택 기능이 추가된 버전)
 # ==========================================
 elif menu_choice == "거래처별 내역":
-    st.title("🔍 거래처 및 날짜별 매입 조회")
+    st.title("🔍 거래처 및 품목별 매입 조회")
     df = load_data("매입자료")
     
     if df.empty:
@@ -237,7 +232,8 @@ elif menu_choice == "거래처별 내역":
         df['매입일자_dt'] = pd.to_datetime(df['매입일자'], errors='coerce')
         valid_dates = df['매입일자_dt'].dropna()
         
-        c1, c2 = st.columns(2)
+        # 💡 조회 상단을 3열 구조로 변경하여 품목 선택창을 넣었습니다.
+        c1, c2, c3 = st.columns(3)
         with c1:
             if '거래처' in df.columns:
                 vendor_list = ["전체"] + df['거래처'].dropna().unique().tolist()
@@ -246,16 +242,31 @@ elif menu_choice == "거래처별 내역":
             sel_vendor = st.selectbox("거래처 선택", vendor_list)
             
         with c2:
+            if '품목명' in df.columns:
+                item_list = ["전체"] + df['품목명'].dropna().unique().tolist()
+            else:
+                item_list = ["전체"]
+            sel_item = st.selectbox("품목 선택", item_list)
+            
+        with c3:
             if not valid_dates.empty:
                 min_d, max_d = valid_dates.min().date(), valid_dates.max().date()
             else:
                 min_d, max_d = date.today(), date.today()
             sel_date = st.date_input("조회 기간 선택", value=(min_d, max_d))
         
+        # 필터링 로직 진행
         filtered_df = df.copy()
+        
+        # 1. 거래처 필터
         if sel_vendor != "전체" and '거래처' in filtered_df.columns:
             filtered_df = filtered_df[filtered_df['거래처'] == sel_vendor]
             
+        # 2. 품목 필터 추가
+        if sel_item != "전체" and '품목명' in filtered_df.columns:
+            filtered_df = filtered_df[filtered_df['품목명'] == sel_item]
+            
+        # 3. 날짜 필터
         if len(sel_date) == 2:
             filtered_df = filtered_df[(filtered_df['매입일자_dt'].dt.date >= sel_date[0]) & (filtered_df['매입일자_dt'].dt.date <= sel_date[1])]
         elif len(sel_date) == 1:
@@ -267,7 +278,7 @@ elif menu_choice == "거래처별 내역":
         
         if not display_df.empty and '총액' in display_df.columns:
             total_sum = pd.to_numeric(display_df['총액'], errors='coerce').sum()
-            st.success(f"💰 해당 기간 **{sel_vendor}**의 매입 총액: **{int(total_sum):,}원**")
+            st.success(f"💰 선택된 조건의 매입 총액: **{int(total_sum):,}원**")
 
 # ==========================================
 # 7. 거래처별 월마감 대금 정산서
