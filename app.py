@@ -65,16 +65,27 @@ elif menu_choice == "품목 등록":
 # ==========================================
 elif menu_choice == "매입 자료 입력":
     st.title("📝 원부자재 매입 내역 등록")
+    # 1. 데이터 불러오기
     df_vendors = conn.read(worksheet="거래처", ttl=0)
     df_items = conn.read(worksheet="품목", ttl=0)
     
-    # 단가 이력 읽기
-    df_history = conn.read(worksheet="단가이력", ttl=0)
-    item_price_map = {}
-    if not df_history.empty and '단가' in df_history.columns:
-        df_history['변경일자'] = pd.to_datetime(df_history['변경일자'])
-        latest_prices = df_history.sort_values('변경일자').groupby('품목명').tail(1)
-        item_price_map = dict(zip(latest_prices['품목명'], latest_prices['단가']))
+    # 💡 [안전 모드] 단가이력 읽기
+    try:
+        df_history = conn.read(worksheet="단가이력", ttl=0)
+        # 데이터가 있고, '단가'라는 열이 존재할 때만 최신 단가 계산
+        if not df_history.empty and '단가' in df_history.columns:
+            df_history['변경일자'] = pd.to_datetime(df_history['변경일자'])
+            latest_prices = df_history.sort_values('변경일자').groupby('품목명').tail(1)
+            item_price_map = dict(zip(latest_prices['품목명'], latest_prices['단가']))
+        else:
+            # 기록이 없으면 품목 시트의 기본 단가 사용
+            item_price_map = dict(zip(df_items['제품명'], df_items['단가']))
+    except:
+        # 아예 시트를 못 읽으면 품목 시트 기본 단가 사용
+        item_price_map = dict(zip(df_items['제품명'], df_items['단가']))
+        st.error("⚠️ '단가이력' 시트 읽기 실패: 시트 이름을 확인해주세요!")
+
+    default_price = item_price_map.get(selected_item, 0)
 
     col1, col2 = st.columns(2)
     with col1:
