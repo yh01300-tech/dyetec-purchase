@@ -22,7 +22,9 @@ menu_choice = st.sidebar.radio("메뉴 선택", ("매입 자료 입력", "거래
 # 4. 각 메뉴 기능
 if menu_choice == "매입 자료 입력":
     st.title("📝 원부자재 매입 내역 등록")
-    df_v, df_i, df_h = load_data("거래처"), load_data("품목"), load_data("단가이력")
+    df_v = load_data("거래처")
+    df_i = load_data("품목")
+    df_h = load_data("단가이력")
     
     item_price_map = {}
     if not df_h.empty:
@@ -44,10 +46,12 @@ if menu_choice == "매입 자료 입력":
 
     if st.button("✅ 입력 완료"):
         df_p = load_data("매입자료")
-        new = pd.DataFrame([{"매입일자": str(date_input), "거래처": vendor, "품목명": item, "수량": qty, "단가": price, "총액": qty*price, "비고": remarks}])
+        new_row = {"매입일자": str(date_input), "거래처": vendor, "품목명": item, "수량": qty, "단가": price, "총액": qty*price, "비고": remarks}
+        new_df = pd.DataFrame([new_row])
         if not df_p.empty:
-            new = new[df_p.columns]
-        conn.update(worksheet="매입자료", data=pd.concat([df_p, new], ignore_index=True))
+            new_df = new_df[df_p.columns]
+        updated_data = pd.concat([df_p, new_df], ignore_index=True)
+        conn.update(worksheet="매입자료", data=updated_data)
         st.cache_data.clear()
         st.rerun()
     st.dataframe(load_data("매입자료"), use_container_width=True)
@@ -60,7 +64,8 @@ elif menu_choice == "거래처 등록":
         submitted = st.form_submit_button("저장")
     if submitted and v_name:
         df = load_data("거래처")
-        conn.update(worksheet="거래처", data=pd.concat([df, pd.DataFrame([{"거래처명": v_name, "사업자등록번호": v_biz}])], ignore_index=True))
+        new_row = pd.DataFrame([{"거래처명": v_name, "사업자등록번호": v_biz}])
+        conn.update(worksheet="거래처", data=pd.concat([df, new_row], ignore_index=True))
         st.cache_data.clear(); st.rerun()
     st.dataframe(load_data("거래처"), use_container_width=True)
 
@@ -78,4 +83,8 @@ elif menu_choice == "품목 등록":
         else:
             df = pd.concat([df, pd.DataFrame([{"제품명": i_name, "단가": i_price}])], ignore_index=True)
         conn.update(worksheet="품목", data=df)
-        conn.update(worksheet="단가이력", data=pd.concat([hist, pd.DataFrame([{"품목명": i_name, "단가": i_price, "변경일자": str(date.
+        
+        # 단가이력 업데이트 (라인을 쪼개서 에러 방지)
+        new_hist = pd.DataFrame([{"품목명": i_name, "단가": i_price, "변경일자": str(date.today())}])
+        updated_hist = pd.concat([hist, new_hist], ignore_index=True)
+        conn.update
