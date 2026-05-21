@@ -30,38 +30,41 @@ if menu_choice == "매입 자료 입력":
     df_i = load_data("품목")
     df_h = load_data("단가이력")
     
-    # 단가 이력 로직
+    # 1. 단가 이력 데이터 처리
     item_price_map = {}
-    if not df_h.empty and '단가' in df_h.columns:
+    if not df_h.empty:
         df_h['변경일자'] = pd.to_datetime(df_h['변경일자'])
         latest = df_h.sort_values('변경일자').groupby('품목명').tail(1)
         item_price_map = dict(zip(latest['품목명'], latest['단가']))
 
-    with st.form("purchase_form", clear_on_submit=True):
-        c1, c2 = st.columns(2)
-        with c1:
-            date_input = st.date_input("매입 일자")
-            vendor = st.selectbox("거래처", df_v['거래처명'].tolist() if not df_v.empty else [])
-            item = st.selectbox("품목명", df_i['제품명'].tolist() if not df_i.empty else [])
-        with c2:
-            base_p = 0
-            if not df_i.empty and item in df_i['제품명'].values:
-                base_p = df_i[df_i['제품명'] == item]['단가'].values[0]
-            default_p = item_price_map.get(item, base_p)
-            
-            qty = st.number_input("수량", min_value=1)
-            price = st.number_input("단가", value=int(default_p), min_value=0)
-            remarks = st.text_input("비고")
-            submit = st.form_submit_button("입력 완료")
+    # 2. 입력 화면 (폼 없음!)
+    c1, c2 = st.columns(2)
+    with c1:
+        date_input = st.date_input("매입 일자")
+        vendor = st.selectbox("거래처", df_v['거래처명'].tolist() if not df_v.empty else [])
+        # 품목 선택 - 선택할 때마다 자동으로 화면이 새로고침됨
+        item = st.selectbox("품목명", df_i['제품명'].tolist() if not df_i.empty else [])
+    
+    with c2:
+        # 단가 계산 로직 (품목이 바뀌면 즉시 이 값이 바뀜)
+        base_p = df_i[df_i['제품명'] == item]['단가'].values[0] if not df_i.empty and item in df_i['제품명'].values else 0
+        final_p = item_price_map.get(item, base_p)
+        
+        qty = st.number_input("수량", min_value=1)
+        # 폼이 없으므로 이제 값이 바로바로 변합니다.
+        price = st.number_input("단가", value=int(final_p), min_value=0)
+        remarks = st.text_input("비고")
 
-    if submit:
+    # 3. 저장 버튼 (폼 밖으로 분리)
+    if st.button("✅ 입력 완료 (저장)"):
         df_p = load_data("매입자료")
         new = pd.DataFrame([{"매입일자": str(date_input), "거래처": vendor, "품목명": item, "수량": qty, "단가": price, "총액": qty*price, "비고": remarks}])
-        if not df_p.empty:
-            new = new[df_p.columns]
+        if not df_p.empty: new = new[df_p.columns]
         conn.update(worksheet="매입자료", data=pd.concat([df_p, new], ignore_index=True))
         st.success("저장 완료!")
         st.rerun()
+
+    st.subheader("📊 누적 내역")
     st.dataframe(load_data("매입자료"), use_container_width=True)
 
 # ==========================================
