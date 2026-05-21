@@ -54,23 +54,17 @@ elif menu_choice == "품목 등록":
     st.dataframe(conn.read(worksheet="품목"), use_container_width=True)
 
 # ==========================================
-# 3. 매입 자료 입력
+# 3. 매입 자료 입력 (최종 완성본)
 # ==========================================
 elif menu_choice == "매입 자료 입력":
     st.title("📝 원부자재 매입 내역 등록")
     
-    # 1. 기존 데이터 읽기
-    existing_data = conn.read(worksheet="매입자료")
-    
-    # 💡 [핵심] 컴퓨터가 기존 데이터를 제대로 읽었는지 화면에 강제로 띄웁니다.
-    st.write("--- 현재 시스템이 인식한 기존 데이터 목록 ---")
-    st.dataframe(existing_data) 
-    st.write("-------------------------------------------")
-    
-    # 품목-단가 사전 생성
+    # 데이터 불러오기
+    df_vendors = conn.read(worksheet="거래처")
+    df_items = conn.read(worksheet="품목")
     item_price_map = dict(zip(df_items['제품명'], df_items['단가']))
 
-    # 2. 폼 바깥에서 품목 선택
+    # 입력 폼
     col1, col2 = st.columns(2)
     with col1:
         date = st.date_input("매입 일자")
@@ -78,7 +72,6 @@ elif menu_choice == "매입 자료 입력":
         selected_item = st.selectbox("품목명", df_items['제품명'].tolist())
         default_price = item_price_map.get(selected_item, 0)
     
-    # 3. 입력 폼
     with st.form("purchase_form", clear_on_submit=True):
         col3, col4 = st.columns(2)
         with col3:
@@ -88,14 +81,14 @@ elif menu_choice == "매입 자료 입력":
             remarks = st.text_input("비고")
             submit = st.form_submit_button("입력 완료")
 
-    # 4. 저장 로직 (이 'if'는 'with' 블록 바깥에 있어야 합니다!)
+    # 저장 로직
     if submit:
         total_price = qty * price
         
         # 1. 기존 데이터 읽기
         existing_data = conn.read(worksheet="매입자료")
         
-        # 2. 새로운 데이터 만들기 (데이터프레임 형태)
+        # 2. 새로운 데이터 만들기
         new_row = pd.DataFrame([{
             "매입일자": str(date), 
             "거래처": vendor, 
@@ -106,20 +99,16 @@ elif menu_choice == "매입 자료 입력":
             "비고": remarks
         }])
         
-        # 💡 [핵심 해결책] 
-        # 기존 데이터의 열 순서와 이름을 그대로 가져와서 new_row에 입힙니다.
-        # 이렇게 하면 절대 데이터가 꼬이지 않습니다.
+        # 3. 💡 [핵심] 기존 데이터 열 순서에 강제로 맞춤 (덮어쓰기 방지)
         new_row = new_row[existing_data.columns]
         
-        # 3. 데이터 합치기
+        # 4. 데이터 합치기 및 저장
         updated_df = pd.concat([existing_data, new_row], ignore_index=True)
-        
-        # 4. 저장
         conn.update(worksheet="매입자료", data=updated_df)
         
         st.success(f"✅ 저장 완료! (총액: **{total_price:,}원**)")
-        st.rerun() # 이제는 저장 후 화면 새로고침이 정상 작동할 겁니다.
+        st.rerun()
 
-    # 5. 목록 표시
+    # 목록 표시
     st.subheader("📊 누적 매입 내역")
     st.dataframe(conn.read(worksheet="매입자료"), use_container_width=True)
