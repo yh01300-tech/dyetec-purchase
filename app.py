@@ -67,18 +67,41 @@ elif menu_choice == "거래처 등록":
     if not df_v.empty: st.dataframe(df_v, use_container_width=True)
     else: st.info("등록된 거래처가 없습니다.")
 
+# ==========================================
+# 💡 거래처 입력 기능이 추가된 [품목 등록] 메뉴
+# ==========================================
 elif menu_choice == "품목 등록":
     st.title("📦 품목 등록/수정")
+    df_v = load_data("거래처")  # 거래처 목록을 불러옵니다.
+    
     with st.form("i_form", clear_on_submit=True):
-        i_name, i_price = st.text_input("제품명 *"), st.number_input("기본 단가", min_value=0)
+        i_name = st.text_input("제품명 *")
+        # 등록된 거래처 목록을 가져와서 선택 박스로 제공합니다.
+        i_vendor = st.selectbox("주거래처 선택", df_v['거래처명'].tolist() if not df_v.empty else ["등록된 거래처 없음"])
+        i_price = st.number_input("기본 단가", min_value=0)
         submitted = st.form_submit_button("등록/수정")
+        
     if submitted and i_name:
-        df, hist = load_data("품목"), load_data("단가이력")
-        if not df.empty and i_name in df['제품명'].values: df.loc[df['제품명'] == i_name, '단가'] = i_price
-        else: df = pd.concat([df, pd.DataFrame([{"제품명": i_name, "단가": i_price}])], ignore_index=True)
-        conn.update(worksheet="품목", data=df)
-        conn.update(worksheet="단가이력", data=pd.concat([hist, pd.DataFrame([{"품목명": i_name, "단가": i_price, "변경일자": str(date.today())}])], ignore_index=True))
-        st.cache_data.clear(); st.rerun()
+        if i_vendor == "등록된 거래처 없음":
+            st.error("거래처를 먼저 등록하신 후 품목을 등록할 수 있습니다.")
+        else:
+            df, hist = load_data("품목"), load_data("단가이력")
+            
+            # 품목 시트 업데이트 (주거래처 열 포함)
+            new_item = pd.DataFrame([{"제품명": i_name, "주거래처": i_vendor, "단가": i_price}])
+            if not df.empty and i_name in df['제품명'].values: 
+                df.loc[df['제품명'] == i_name, '단가'] = i_price
+                df.loc[df['제품명'] == i_name, '주거래처'] = i_vendor
+            else: 
+                df = pd.concat([df, new_item], ignore_index=True)
+            conn.update(worksheet="품목", data=df)
+            
+            # 단가이력 기록 시에도 거래처 정보와 함께 기록
+            new_h = pd.DataFrame([{"품목명": i_name, "거래처": i_vendor, "단가": i_price, "변경일자": str(date.today())}])
+            conn.update(worksheet="단가이력", data=pd.concat([hist, new_h], ignore_index=True))
+            
+            st.cache_data.clear(); st.rerun()
+            
     st.subheader("📦 현재 품목 목록")
     df_i = load_data("품목")
     if not df_i.empty: st.dataframe(df_i, use_container_width=True)
@@ -90,54 +113,35 @@ elif menu_choice == "단가변동이력":
     if not df.empty: st.dataframe(df, use_container_width=True)
     else: st.info("아직 변경된 단가 이력이 없습니다.")
 
-# ==========================================
-# 💡 대폭 업그레이드된 [거래처별 내역] 조회 메뉴
-# ==========================================
 elif menu_choice == "거래처별 내역":
     st.title("🔍 거래처 및 날짜별 매입 조회")
     df = load_data("매입자료")
-    
     if not df.empty and '매입일자' in df.columns:
-        # 안전한 조회를 위해 날짜 형식 변환
         df['매입일자_dt'] = pd.to_datetime(df['매입일자'], errors='coerce')
-        
         c1, c2 = st.columns(2)
         with c1:
-            # '전체' 옵션 추가
             vendor_list = ["전체"] + df['거래처'].unique().tolist()
             sel_vendor = st.selectbox("거래처 선택", vendor_list)
         with c2:
-            # 캘린더 기본값을 데이터의 처음~끝 날짜로 설정
             min_d = df['매입일자_dt'].min().date() if pd.notnull(df['매입일자_dt'].min()) else date.today()
-            max_d = df['매입일자_dt'].max().date() if pd.notnull(df['매입일자_dt'].max()) else date.today()
+            max_d = df['매입일자_dt'].max().date() if pd.notnull(df['매입일_dt'].max()) else date.today()
             sel_date = st.date_input("조회 기간 선택", value=(min_d, max_d))
         
-        # 필터링 시작
         filtered_df = df.copy()
-        
-        # 1. 거래처 필터
         if sel_vendor != "전체":
             filtered_df = filtered_df[filtered_df['거래처'] == sel_vendor]
-            
-        # 2. 날짜 필터
         if len(sel_date) == 2:
             start_date, end_date = sel_date
             filtered_df = filtered_df[(filtered_df['매입일자_dt'].dt.date >= start_date) & (filtered_df['매입일자_dt'].dt.date <= end_date)]
         elif len(sel_date) == 1:
-            # 시작일만 선택된 경우 (사용자가 클릭 중일 때 에러 방지)
             start_date = sel_date[0]
             filtered_df = filtered_df[filtered_df['매입일자_dt'].dt.date == start_date]
 
-        # 화면 출력용으로 변환용 열 제거
         display_df = filtered_df.drop(columns=['매입일자_dt'])
-        
         st.write(f"조회 결과: 총 **{len(display_df)}건**")
         st.dataframe(display_df, use_container_width=True)
-        
-        # 총액 계산 표시 (결산용)
         if not display_df.empty and '총액' in display_df.columns:
             total_sum = display_df['총액'].sum()
             st.success(f"💰 해당 기간 **{sel_vendor}**의 매입 총액: **{int(total_sum):,}원**")
-            
     else:
         st.info("조회할 매입 내역이 없습니다.")
