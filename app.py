@@ -3,12 +3,13 @@ import pandas as pd
 from datetime import date
 from streamlit_gsheets import GSheetsConnection
 
-# --- 웹사이트 기본 설정 ---
+# --- 설정 ---
 st.set_page_config(page_title="현대다이텍 업무 관리 시스템", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 st.sidebar.title("📌 메인 메뉴")
-menu_choice = st.sidebar.radio("원하시는 업무를 선택해 주십시오.", ("매입 자료 입력", "거래처 등록", "품목 등록", "거래처별 내역"))
+menu_choice = st.sidebar.radio("원하시는 업무를 선택해 주십시오.", 
+                               ("매입 자료 입력", "거래처 등록", "품목 등록", "단가변동이력", "거래처별 내역"))
 
 # ==========================================
 # 1. 거래처 등록
@@ -29,11 +30,10 @@ if menu_choice == "거래처 등록":
         conn.update(worksheet="거래처", data=pd.concat([existing_data, new_data], ignore_index=True))
         st.success("✅ 저장되었습니다.")
         st.rerun()
-    st.subheader("📋 등록된 거래처 목록")
     st.dataframe(conn.read(worksheet="거래처", ttl=0), use_container_width=True)
 
 # ==========================================
-# 2. 품목 등록 (단가 이력 자동 기록)
+# 2. 품목 등록 (이력 자동 기록)
 # ==========================================
 elif menu_choice == "품목 등록":
     st.title("📦 신규 품목 등록")
@@ -43,39 +43,38 @@ elif menu_choice == "품목 등록":
         submitted = st.form_submit_button("품목 저장하기")
         
     if submitted and item_name:
-        # 1. 품목 시트 업데이트
         df_items = conn.read(worksheet="품목", ttl=0)
-        new_item = pd.DataFrame([{"제품명": item_name, "단가": unit_price}])
+        # 품목 업데이트
         if item_name in df_items['제품명'].values:
             df_items.loc[df_items['제품명'] == item_name, '단가'] = unit_price
         else:
-            df_items = pd.concat([df_items, new_item], ignore_index=True)
+            df_items = pd.concat([df_items, pd.DataFrame([{"제품명": item_name, "단가": unit_price}])], ignore_index=True)
         conn.update(worksheet="품목", data=df_items)
         
-        # 2. 단가이력 시트 기록
+        # 단가 이력 저장
         df_history = conn.read(worksheet="단가이력", ttl=0)
         new_history = pd.DataFrame([{"품목명": item_name, "단가": unit_price, "변경일자": str(date.today())}])
         conn.update(worksheet="단가이력", data=pd.concat([df_history, new_history], ignore_index=True))
         
-        st.success("✅ 품목 등록 및 단가 이력 기록 완료!")
+        st.success("✅ 품목 등록 및 이력 저장 완료!")
         st.rerun()
-
-    st.subheader("📋 등록된 품목 목록")
     st.dataframe(conn.read(worksheet="품목", ttl=0), use_container_width=True)
 
 # ==========================================
-# 3. 매입 자료 입력 (최신 단가 자동 불러오기)
+# 3. 매입 자료 입력
 # ==========================================
 elif menu_choice == "매입 자료 입력":
     st.title("📝 원부자재 매입 내역 등록")
-    
     df_vendors = conn.read(worksheet="거래처", ttl=0)
     df_items = conn.read(worksheet="품목", ttl=0)
-    # 최신 단가 불러오기 로직
+    
+    # 단가 이력 읽기 (안전장치 추가)
     df_history = conn.read(worksheet="단가이력", ttl=0)
-    df_history['변경일자'] = pd.to_datetime(df_history['변경일자'])
-    latest_prices = df_history.sort_values('변경일자').groupby('품목명').tail(1)
-    item_price_map = dict(zip(latest_prices['품목명'], latest_prices['단가']))
+    item_price_map = {}
+    if not df_history.empty and '단가' in df_history.columns:
+        df_history['변경일자'] = pd.to_datetime(df_history['변경일자'])
+        latest_prices = df_history.sort_values('변경일자').groupby('품목명').tail(1)
+        item_price_map = dict(zip(latest_prices['품목명'], latest_prices['단가']))
 
     col1, col2 = st.columns(2)
     with col1:
@@ -101,14 +100,22 @@ elif menu_choice == "매입 자료 입력":
         new_row = new_row[existing_data.columns]
         updated_df = pd.concat([existing_data, new_row], ignore_index=True)
         conn.update(worksheet="매입자료", data=updated_df)
-        st.success(f"✅ 저장 완료! (총액: {total_price:,}원)")
+        st.success(f"✅ 저장 완료!")
         st.rerun()
 
-    st.subheader("📊 누적 매입 내역")
-    st.dataframe(conn.read(worksheet="매입자료", ttl=0), use_container_width=True)
+# ==========================================
+# 4. 단가변동이력 조회 (새로 추가!)
+# ==========================================
+elif menu_choice == "단가변동이력":
+    st.title("📈 품목별 단가 변동 이력")
+    df_history = conn.read(worksheet="단가이력", ttl=0)
+    if df_history.empty:
+        st.warning("아직 등록된 단가 이력이 없습니다.")
+    else:
+        st.dataframe(df_history.sort_values(by='변경일자', ascending=False), use_container_width=True)
 
 # ==========================================
-# 4. 거래처별 & 기간별 내역 조회
+# 5. 거래처별 & 기간별 내역 조회
 # ==========================================
 elif menu_choice == "거래처별 내역":
     st.title("🔍 기간 및 거래처별 내역 조회")
@@ -117,16 +124,10 @@ elif menu_choice == "거래처별 내역":
         st.warning("데이터가 없습니다.")
     else:
         df['매입일자'] = pd.to_datetime(df['매입일자'])
-        col_a, col_b = st.columns(2)
-        with col_a: start_date = st.date_input("시작일", value=df['매입일자'].min())
-        with col_b: end_date = st.date_input("종료일", value=df['매입일자'].max())
-            
-        vendor_list = df['거래처'].unique().tolist()
-        selected_vendor = st.selectbox("조회할 거래처 선택", vendor_list)
+        start_date = st.date_input("시작일", value=df['매입일자'].min())
+        end_date = st.date_input("종료일", value=df['매입일자'].max())
+        selected_vendor = st.selectbox("조회할 거래처 선택", df['거래처'].unique().tolist())
         
         mask = (df['매입일자'].dt.date >= start_date) & (df['매입일자'].dt.date <= end_date) & (df['거래처'] == selected_vendor)
-        filtered_df = df[mask]
-        
-        st.subheader(f"🏢 [{selected_vendor}] 상세 내역")
-        st.dataframe(filtered_df, use_container_width=True)
-        st.metric(label="선택 기간 총 매입액", value=f"{filtered_df['총액'].sum():,} 원")
+        st.dataframe(df[mask], use_container_width=True)
+        st.metric(label="총 매입액", value=f"{df[mask]['총액'].sum():,} 원")
