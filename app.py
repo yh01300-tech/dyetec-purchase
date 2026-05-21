@@ -59,9 +59,13 @@ elif menu_choice == "품목 등록":
 elif menu_choice == "매입 자료 입력":
     st.title("📝 원부자재 매입 내역 등록")
     
-    # 1. 데이터 불러오기
-    df_vendors = conn.read(worksheet="거래처")
-    df_items = conn.read(worksheet="품목")
+    # 1. 기존 데이터 읽기
+    existing_data = conn.read(worksheet="매입자료")
+    
+    # 💡 [핵심] 컴퓨터가 기존 데이터를 제대로 읽었는지 화면에 강제로 띄웁니다.
+    st.write("--- 현재 시스템이 인식한 기존 데이터 목록 ---")
+    st.dataframe(existing_data) 
+    st.write("-------------------------------------------")
     
     # 품목-단가 사전 생성
     item_price_map = dict(zip(df_items['제품명'], df_items['단가']))
