@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 import os
-import altair as alt  # 💡 고급 그래프를 그리기 위한 모듈 추가
+import altair as alt
 from streamlit_gsheets import GSheetsConnection
 
 # 1. 설정
@@ -29,10 +29,14 @@ if st.sidebar.button("🔄 시스템 새로고침 (오류 해결)"):
     st.cache_data.clear()
     st.rerun()
 
-menu_choice = st.sidebar.radio("메뉴 선택", ("종합 대시보드", "매입 자료 입력", "거래처 등록", "품목 등록", "단가변동이력", "거래처별 내역"))
+# 💡 메뉴 선택에 '월마감 정산서'가 추가되었습니다.
+menu_choice = st.sidebar.radio(
+    "메뉴 선택", 
+    ("종합 대시보드", "매입 자료 입력", "거래처 등록", "품목 등록", "단가변동이력", "거래처별 내역", "월마감 정산서")
+)
 
 # ==========================================
-# 1. 종합 대시보드 (가로 글씨 그래프 적용)
+# 1. 종합 대시보드
 # ==========================================
 if menu_choice == "종합 대시보드":
     st.title("📊 월간 매입 종합 대시보드")
@@ -83,7 +87,6 @@ if menu_choice == "종합 대시보드":
             if not curr_df.empty and '거래처' in curr_df.columns:
                 vendor_totals = curr_df.groupby('거래처')['총액'].sum().reset_index()
                 
-                # 💡 글씨를 가로(0도)로 고정하는 고급 그래프 코드
                 chart = alt.Chart(vendor_totals).mark_bar(color='#4F8BF9').encode(
                     x=alt.X('거래처', axis=alt.Axis(labelAngle=0, title='거래처명')),
                     y=alt.Y('총액', axis=alt.Axis(title='매입 총액(원)')),
@@ -240,3 +243,52 @@ elif menu_choice == "거래처별 내역":
         if not display_df.empty and '총액' in display_df.columns:
             total_sum = pd.to_numeric(display_df['총액'], errors='coerce').sum()
             st.success(f"💰 해당 기간 **{sel_vendor}**의 매입 총액: **{int(total_sum):,}원**")
+
+# ==========================================
+# 💡 7. 거래처별 월마감 대금 정산서 (신규 기능)
+# ==========================================
+elif menu_choice == "월마감 정산서":
+    st.title("🖨️ 거래처별 월마감 대금 정산서")
+    df = load_data("매입자료")
+    
+    if df.empty:
+        st.info("조회할 매입 자료가 없습니다.")
+    elif '매입일자' not in df.columns or '거래처' not in df.columns:
+        st.error("⚠️ 구글 시트 구조를 확인해주세요. '매입일자'와 '거래처' 열이 필요합니다.")
+    else:
+        df['매입일자_dt'] = pd.to_datetime(df['매입일자'], errors='coerce')
+        df_valid = df.dropna(subset=['매입일자_dt'])
+        
+        # 데이터가 존재할 경우 년월(YYYY-MM) 리스트 추출
+        if not df_valid.empty:
+            df_valid['년월'] = df_valid['매입일자_dt'].dt.strftime('%Y-%m')
+            ym_list = sorted(df_valid['년월'].unique(), reverse=True)
+        else:
+            ym_list = [date.today().strftime('%Y-%m')]
+            
+        c1, c2 = st.columns(2)
+        with c1:
+            sel_ym = st.selectbox("정산 대상 월 선택", ym_list)
+        with c2:
+            vendor_list = df['거래처'].dropna().unique().tolist()
+            sel_vendor = st.selectbox("정산 대상 거래처 선택", vendor_list if vendor_list else ["등록된 거래처 없음"])
+            
+        if not df_valid.empty and sel_vendor != "등록된 거래처 없음":
+            # 년월 및 거래처 동시 필터링
+            filtered = df_valid[(df_valid['년월'] == sel_ym) & (df_valid['거래처'] == sel_vendor)]
+            
+            st.divider()
+            st.subheader(f"🧾 {sel_ym} [{sel_vendor}] 물품매입대금 정산명세서")
+            
+            # 불필요한 변환 열 제거 후 출력
+            display_df = filtered.drop(columns=['매입일자_dt', '년월'])
+            st.dataframe(display_df, use_container_width=True)
+            
+            if not display_df.empty and '총액' in display_df.columns:
+                total_sum = pd.to_numeric(display_df['총액'], errors='coerce').sum()
+                
+                # 명세서 스타일 포맷팅
+                st.info(f"■ {sel_ym} 마감 공급가액 합계:  **{int(total_sum):,} 원**")
+                st.success(f"🎉 위 금액을 [{sel_vendor}]의 {sel_ym} 귀속 마감 대금으로 확정합니다.")
+            else:
+                st.warning(f"⚠️ 선택하신 {sel_ym}에 [{sel_vendor}]와 거래한 내역이 존재하지 않습니다.")
