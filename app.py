@@ -77,23 +77,25 @@ elif menu_choice == "매입 자료 입력":
             submit = st.form_submit_button("입력 완료")
 
     if submit:
-        # 💡 총액 자동 계산
+        # 1. 총액 계산
         total_price = qty * price
         
+        # 2. 데이터 저장
         new_row = pd.DataFrame([{
             "매입일자": str(date), 
             "거래처": vendor, 
             "품목명": item, 
             "수량": qty, 
             "단가": price, 
-            "총액": total_price, # 자동 계산된 총액
+            "총액": total_price, 
             "비고": remarks
         }])
         
-        # 기존 데이터에 추가
         existing_data = conn.read(worksheet="매입자료")
         conn.update(worksheet="매입자료", data=pd.concat([existing_data, new_row], ignore_index=True))
-        st.success("✅ 매입 내역(총액 포함)이 저장되었습니다.")
+        
+        # 💡 [핵심] 성공 메시지에 총액을 포함해서 바로 보여줍니다!
+        st.success(f"✅ 저장 완료! (이번 입력 건 총액: **{total_price:,}원**)")
         st.rerun()
 
     st.subheader("📊 누적 매입 내역")
