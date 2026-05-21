@@ -8,7 +8,7 @@ st.set_page_config(page_title="현대다이텍 업무 관리 시스템", layout=
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 st.sidebar.title("📌 메인 메뉴")
-menu_choice = st.sidebar.radio("원하시는 업무를 선택해 주십시오.", ("매입 자료 입력", "거래처 등록", "품목 등록"))
+menu_choice = st.sidebar.radio("원하시는 업무를 선택해 주십시오.", ("매입 자료 입력", "거래처 등록", "품목 등록", "거래처별 내역"))
 
 # ==========================================
 # 1. 거래처 등록
@@ -106,3 +106,43 @@ elif menu_choice == "매입 자료 입력":
     # 5. 목록 표시 (오타 수정됨)
     st.subheader("📊 누적 매입 내역")
     st.dataframe(conn.read(worksheet="매입자료", ttl=0), use_container_width=True)
+
+# ==========================================
+# 4. 거래처별 & 기간별 내역 조회
+# ==========================================
+elif menu_choice == "거래처별 내역":
+    st.title("🔍 기간 및 거래처별 내역 조회")
+    
+    # 1. 데이터 불러오기
+    df = conn.read(worksheet="매입자료", ttl=0)
+    
+    if df.empty:
+        st.warning("데이터가 없습니다.")
+    else:
+        # 2. '매입일자' 열을 날짜 형식으로 변환 (비교를 위해 필수!)
+        df['매입일자'] = pd.to_datetime(df['매입일자'])
+        
+        # 3. 기간 선택 (사이드바 혹은 위쪽에 배치)
+        col_a, col_b = st.columns(2)
+        with col_a:
+            start_date = st.date_input("시작일", value=df['매입일자'].min())
+        with col_b:
+            end_date = st.date_input("종료일", value=df['매입일자'].max())
+            
+        # 4. 거래처 선택
+        vendor_list = df['거래처'].unique().tolist()
+        selected_vendor = st.selectbox("조회할 거래처를 선택하십시오.", vendor_list)
+        
+        # 5. 필터링 (기간 + 거래처)
+        mask = (df['매입일자'].dt.date >= start_date) & \
+               (df['매입일자'].dt.date <= end_date) & \
+               (df['거래처'] == selected_vendor)
+        filtered_df = df[mask]
+        
+        # 6. 결과 표시
+        st.subheader(f"🏢 [{selected_vendor}] {start_date} ~ {end_date} 상세 내역")
+        st.dataframe(filtered_df, use_container_width=True)
+        
+        # 7. 총액 집계
+        total_sum = filtered_df['총액'].sum()
+        st.metric(label="선택 기간 총 매입액", value=f"{total_sum:,} 원")
