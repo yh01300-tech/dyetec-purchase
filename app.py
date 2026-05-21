@@ -19,26 +19,18 @@ menu_choice = st.sidebar.radio("메뉴 선택",
 # ==========================================
 # 1. 매입 자료 입력
 # ==========================================
-if menu_choice == "매입 자료 입력":
+elif menu_choice == "매입 자료 입력":
     st.title("📝 원부자재 매입 내역 등록")
     df_v = load_data("거래처")
     df_i = load_data("품목")
     df_h = load_data("단가이력")
     
-    # 최신 단가 불러오기 로직
+    # 1. 단가이력 시트에서 최신 단가 찾기
     item_price_map = {}
-    if not df_h.empty and '단가' in df_h.columns and '품목명' in df_h.columns:
-        # 제목 및 데이터의 공백 제거 (매칭 실패 방지)
-        df_h.columns = df_h.columns.str.strip()
-        df_h['품목명'] = df_h['품목명'].astype(str).str.strip()
+    if not df_h.empty:
         df_h['변경일자'] = pd.to_datetime(df_h['변경일자'])
-        
-        # 품목별 최신 단가 추출
         latest = df_h.sort_values('변경일자').groupby('품목명').tail(1)
         item_price_map = dict(zip(latest['품목명'], latest['단가']))
-
-    # 💡 [진단] 매칭 결과 확인
-    # st.write("현재 인식된 단가 맵:", item_price_map)
 
     with st.form("purchase_form", clear_on_submit=True):
         c1, c2 = st.columns(2)
@@ -48,18 +40,27 @@ if menu_choice == "매입 자료 입력":
             item = st.selectbox("품목명", df_i['제품명'].tolist() if not df_i.empty else [])
         
         with c2:
-            # 💡 단가 적용 로직: 
-            # 1. 단가이력에 있으면 최신단가, 2. 없으면 품목시트 단가, 3. 둘 다 없으면 0
-            default_p = item_price_map.get(item.strip(), 0)
-            if default_p == 0 and not df_i.empty:
-                # 품목 시트에서라도 찾아봄
-                match = df_i[df_i['제품명'].astype(str).str.strip() == item.strip()]
-                if not match.empty: default_p = match.iloc[0]['단가']
+            # 💡 [핵심 로직] 이력이 있으면 이력단가, 없으면 품목시트 기본단가 적용
+            base_price = 0
+            if not df_i.empty and item in df_i['제품명'].values:
+                base_price = df_i[df_i['제품명'] == item]['단가'].values[0]
+            
+            # 최종 단가 결정: 이력에 있으면 이력값, 없으면 기본값
+            final_price = item_price_map.get(item, base_price)
             
             qty = st.number_input("수량", min_value=1)
-            price = st.number_input("단가", value=int(default_p), min_value=0)
+            # key를 주지 않거나, key를 품목명에 따라 바꾸면 값이 갱신됩니다.
+            price = st.number_input("단가", value=int(final_price), min_value=0)
             remarks = st.text_input("비고")
             submit = st.form_submit_button("입력 완료")
+
+    if submit:
+        df_p = load_data("매입자료")
+        new = pd.DataFrame([{"매입일자": str(date_input), "거래처": vendor, "품목명": item, "수량": qty, "단가": price, "총액": qty*price, "비고": remarks}])
+        if not df_p.empty: new = new[df_p.columns]
+        conn.update(worksheet="매입자료", data=pd.concat([df_p, new], ignore_index=True))
+        st.success(f"✅ {item} 단가 {price}원으로 저장 완료!")
+        st.rerun()
 
 # ==========================================
 # 2. 거래처 등록
