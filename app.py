@@ -77,10 +77,10 @@ elif menu_choice == "매입 자료 입력":
             submit = st.form_submit_button("입력 완료")
 
     if submit:
-        # 1. 총액 계산
+        # 총액 계산
         total_price = qty * price
         
-        # 2. 데이터 저장
+        # 데이터 저장
         new_row = pd.DataFrame([{
             "매입일자": str(date), 
             "거래처": vendor, 
@@ -94,10 +94,7 @@ elif menu_choice == "매입 자료 입력":
         existing_data = conn.read(worksheet="매입자료")
         conn.update(worksheet="매입자료", data=pd.concat([existing_data, new_row], ignore_index=True))
         
-        # 💡 [핵심] 성공 메시지에 총액을 포함해서 바로 보여줍니다!
         st.success(f"✅ 저장 완료! (이번 입력 건 총액: **{total_price:,}원**)")
-        st.rerun()
 
     st.subheader("📊 누적 매입 내역")
-    # 구글 시트에서 최신 데이터 다시 불러와서 표로 보여주기
     st.dataframe(conn.read(worksheet="매입자료"), use_container_width=True)
