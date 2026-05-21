@@ -92,13 +92,10 @@ elif menu_choice == "매입 자료 입력":
     if submit:
         total_price = qty * price
         
-        # 데이터 읽기
+        # 1. 기존 데이터 읽기
         existing_data = conn.read(worksheet="매입자료")
         
-        # 데이터가 비어있을 경우 대비 (덮어쓰기 방지)
-        if existing_data is None or existing_data.empty:
-             existing_data = pd.DataFrame(columns=["매입일자", "거래처", "품목명", "수량", "단가", "총액", "비고"])
-            
+        # 2. 새로운 데이터 만들기 (데이터프레임 형태)
         new_row = pd.DataFrame([{
             "매입일자": str(date), 
             "거래처": vendor, 
@@ -109,9 +106,19 @@ elif menu_choice == "매입 자료 입력":
             "비고": remarks
         }])
         
+        # 💡 [핵심 해결책] 
+        # 기존 데이터의 열 순서와 이름을 그대로 가져와서 new_row에 입힙니다.
+        # 이렇게 하면 절대 데이터가 꼬이지 않습니다.
+        new_row = new_row[existing_data.columns]
+        
+        # 3. 데이터 합치기
         updated_df = pd.concat([existing_data, new_row], ignore_index=True)
+        
+        # 4. 저장
         conn.update(worksheet="매입자료", data=updated_df)
+        
         st.success(f"✅ 저장 완료! (총액: **{total_price:,}원**)")
+        st.rerun() # 이제는 저장 후 화면 새로고침이 정상 작동할 겁니다.
 
     # 5. 목록 표시
     st.subheader("📊 누적 매입 내역")
