@@ -59,56 +59,34 @@ elif menu_choice == "품목 등록":
 elif menu_choice == "매입 자료 입력":
     st.title("📝 원부자재 매입 내역 등록")
     
-    # 데이터 불러오기
-    df_vendors = conn.read(worksheet="거래처")
-    df_items = conn.read(worksheet="품목")
+    # 💡 [핵심] ttl=0을 넣어 무조건 새로 읽어오게 합니다.
+    df_vendors = conn.read(worksheet="거래처", ttl=0)
+    df_items = conn.read(worksheet="품목", ttl=0)
     item_price_map = dict(zip(df_items['제품명'], df_items['단가']))
 
-    # 입력 폼
+    # (입력 폼 부분은 그대로...)
     col1, col2 = st.columns(2)
-    with col1:
-        date = st.date_input("매입 일자")
-        vendor = st.selectbox("매입 거래처", df_vendors['거래처명'].tolist())
-        selected_item = st.selectbox("품목명", df_items['제품명'].tolist())
-        default_price = item_price_map.get(selected_item, 0)
+    # ... (생략) ...
     
-    with st.form("purchase_form", clear_on_submit=True):
-        col3, col4 = st.columns(2)
-        with col3:
-            qty = st.number_input("수량", min_value=1)
-            price = st.number_input("단가", value=int(default_price), min_value=0)
-        with col4:
-            remarks = st.text_input("비고")
-            submit = st.form_submit_button("입력 완료")
-
     # 저장 로직
     if submit:
         total_price = qty * price
         
-        # 1. 기존 데이터 읽기
-        existing_data = conn.read(worksheet="매입자료")
+        # 💡 [핵심] 여기도 ttl=0 필수!
+        existing_data = conn.read(worksheet="매입자료", ttl=0)
         
-        # 2. 새로운 데이터 만들기
         new_row = pd.DataFrame([{
-            "매입일자": str(date), 
-            "거래처": vendor, 
-            "품목명": selected_item, 
-            "수량": qty, 
-            "단가": price, 
-            "총액": total_price, 
-            "비고": remarks
+            "매입일자": str(date), "거래처": vendor, "품목명": selected_item, 
+            "수량": qty, "단가": price, "총액": total_price, "비고": remarks
         }])
         
-        # 3. 💡 [핵심] 기존 데이터 열 순서에 강제로 맞춤 (덮어쓰기 방지)
         new_row = new_row[existing_data.columns]
-        
-        # 4. 데이터 합치기 및 저장
         updated_df = pd.concat([existing_data, new_row], ignore_index=True)
         conn.update(worksheet="매입자료", data=updated_df)
         
         st.success(f"✅ 저장 완료! (총액: **{total_price:,}원**)")
         st.rerun()
 
-    # 목록 표시
+    # 💡 [핵심] 여기도 ttl=0 필수!
     st.subheader("📊 누적 매입 내역")
-    st.dataframe(conn.read(worksheet="매입자료"), use_container_width=True)
+    st.dataframe(conn.read(worksheet="매입자료", ttl=0), use_container_width=True)
