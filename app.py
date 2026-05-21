@@ -59,7 +59,7 @@ elif menu_choice == "품목 등록":
 elif menu_choice == "매입 자료 입력":
     st.title("📝 원부자재 매입 내역 등록")
     
-    # 1. 데이터 불러오기 (캐시 초기화)
+    # 1. 데이터 불러오기
     df_vendors = conn.read(worksheet="거래처", ttl=0)
     df_items = conn.read(worksheet="품목", ttl=0)
     item_price_map = dict(zip(df_items['제품명'], df_items['단가']))
@@ -72,7 +72,7 @@ elif menu_choice == "매입 자료 입력":
         selected_item = st.selectbox("품목명", df_items['제품명'].tolist())
         default_price = item_price_map.get(selected_item, 0)
     
-    # 3. 폼 시작 (이 안에 submit 버튼이 있음)
+    # 3. 폼 시작
     with st.form("purchase_form", clear_on_submit=True):
         col3, col4 = st.columns(2)
         with col3:
@@ -82,7 +82,7 @@ elif menu_choice == "매입 자료 입력":
             remarks = st.text_input("비고")
             submit = st.form_submit_button("입력 완료")
 
-    # 4. 💡 [중요] if submit:은 폼 밖으로 나와야 합니다! (들여쓰기 주의)
+    # 4. 저장 로직 (폼 바깥)
     if submit:
         total_price = qty * price
         existing_data = conn.read(worksheet="매입자료", ttl=0)
@@ -93,14 +93,16 @@ elif menu_choice == "매입 자료 입력":
             "수량": qty, "단가": price, "총액": total_price, "비고": remarks
         }])
         
-        # 형식 맞추고 저장
+        # 기존 데이터 열 순서에 강제로 맞춤
         new_row = new_row[existing_data.columns]
+        
+        # 데이터 합치기 및 저장
         updated_df = pd.concat([existing_data, new_row], ignore_index=True)
         conn.update(worksheet="매입자료", data=updated_df)
         
         st.success(f"✅ 저장 완료! (총액: {total_price:,}원)")
         st.rerun()
 
-    # 5. 목록 표시
+    # 5. 목록 표시 (오타 수정됨)
     st.subheader("📊 누적 매입 내역")
-    st.dataframe(conn.read(worksheet="매입자료", ttl=0), use_container_width=True)=True)
+    st.dataframe(conn.read(worksheet="매입자료", ttl=0), use_container_width=True)
