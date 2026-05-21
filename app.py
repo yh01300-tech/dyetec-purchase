@@ -68,7 +68,7 @@ elif menu_choice == "매입 자료 입력":
     df_vendors = conn.read(worksheet="거래처", ttl=0)
     df_items = conn.read(worksheet="품목", ttl=0)
     
-    # 단가 이력 읽기 (안전장치 추가)
+    # 단가 이력 읽기
     df_history = conn.read(worksheet="단가이력", ttl=0)
     item_price_map = {}
     if not df_history.empty and '단가' in df_history.columns:
@@ -102,6 +102,10 @@ elif menu_choice == "매입 자료 입력":
         conn.update(worksheet="매입자료", data=updated_df)
         st.success(f"✅ 저장 완료!")
         st.rerun()
+
+    # 📊 누적 내역 표시 (누락되었던 부분)
+    st.subheader("📊 누적 매입 내역")
+    st.dataframe(conn.read(worksheet="매입자료", ttl=0), use_container_width=True)
 
 # ==========================================
 # 4. 단가변동이력 조회 (새로 추가!)
