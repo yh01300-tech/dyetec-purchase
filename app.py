@@ -45,7 +45,8 @@ if menu_choice == "매입 자료 입력":
             default_p = item_price_map.get(item, base_p)
             
             qty = st.number_input("수량", min_value=1)
-            price = st.number_input("단가", value=int(default_p), min_value=0)
+            price = st.number_input("단가", value=int(default_p), min_value=0, key=f"price_{item}")
+            
             remarks = st.text_input("비고")
             submit = st.form_submit_button("입력 완료")
 
