@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 import os
+import altair as alt  # 💡 고급 그래프를 그리기 위한 모듈 추가
 from streamlit_gsheets import GSheetsConnection
 
 # 1. 설정
@@ -31,7 +32,7 @@ if st.sidebar.button("🔄 시스템 새로고침 (오류 해결)"):
 menu_choice = st.sidebar.radio("메뉴 선택", ("종합 대시보드", "매입 자료 입력", "거래처 등록", "품목 등록", "단가변동이력", "거래처별 내역"))
 
 # ==========================================
-# 1. 종합 대시보드
+# 1. 종합 대시보드 (가로 글씨 그래프 적용)
 # ==========================================
 if menu_choice == "종합 대시보드":
     st.title("📊 월간 매입 종합 대시보드")
@@ -81,7 +82,15 @@ if menu_choice == "종합 대시보드":
             st.subheader(f"🏆 {this_month}월 거래처별 매입 비중 (단위: 원)")
             if not curr_df.empty and '거래처' in curr_df.columns:
                 vendor_totals = curr_df.groupby('거래처')['총액'].sum().reset_index()
-                st.bar_chart(vendor_totals.set_index('거래처'))
+                
+                # 💡 글씨를 가로(0도)로 고정하는 고급 그래프 코드
+                chart = alt.Chart(vendor_totals).mark_bar(color='#4F8BF9').encode(
+                    x=alt.X('거래처', axis=alt.Axis(labelAngle=0, title='거래처명')),
+                    y=alt.Y('총액', axis=alt.Axis(title='매입 총액(원)')),
+                    tooltip=['거래처', '총액']
+                ).properties(height=400)
+                
+                st.altair_chart(chart, use_container_width=True)
             else:
                 st.info("이번 달 등록된 매입 내역이 없어 그래프를 표시할 수 없습니다.")
 
