@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
+import os
 from streamlit_gsheets import GSheetsConnection
 
 # 1. 설정
@@ -14,8 +15,17 @@ def load_data(ws):
     except:
         return pd.DataFrame()
 
-# 2. 사이드바
-st.logo("logo.png")
+# ==========================================
+# 💡 2. 사이드바 (로고 에러 방지 안전장치)
+# ==========================================
+# logo.png 파일이 없거나 깨졌을 경우, 에러를 내지 않고 원래 글씨를 띄웁니다.
+try:
+    if os.path.exists("logo.png"):
+        st.logo("logo.png")
+    else:
+        st.sidebar.title("🏢 현대다이텍 시스템")
+except Exception:
+    st.sidebar.title("🏢 현대다이텍 시스템")
 
 if st.sidebar.button("🔄 시스템 새로고침 (오류 해결)"):
     st.cache_data.clear()
