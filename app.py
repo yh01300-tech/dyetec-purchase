@@ -53,6 +53,7 @@ if menu_choice == "거래처 등록":
             # 4) 구글 시트에 업데이트(저장)
             conn.update(worksheet="거래처", data=updated_data)
             st.success(f"✅ [{vendor_name}] 구글 시트에 등록 완료되었습니다.")
+            st.rerun()
             
     st.markdown("---")
     st.subheader("📋 등록된 거래처 목록")
