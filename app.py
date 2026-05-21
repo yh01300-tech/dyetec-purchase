@@ -91,19 +91,28 @@ elif menu_choice == "매입 자료 입력":
     if submit:
         total_price = qty * price
         
-        # 기존 데이터를 다시 확실하게 불러옵니다.
+        # 1. 데이터 읽기
         existing_data = conn.read(worksheet="매입자료")
         
-        # 새로운 데이터 행 생성
+        # 2. 만약 기존 데이터가 비어있더라도 오류가 나지 않게 빈 틀을 만들어둠
+        if existing_data is None or existing_data.empty:
+            existing_data = pd.DataFrame(columns=["매입일자", "거래처", "품목명", "수량", "단가", "총액", "비고"])
+            
+        # 3. 새로운 데이터 만들기
         new_row = pd.DataFrame([{
-            "매입일자": str(date), "거래처": vendor, "품목명": selected_item, 
-            "수량": qty, "단가": price, "총액": total_price, "비고": remarks
+            "매입일자": str(date), 
+            "거래처": vendor, 
+            "품목명": selected_item, 
+            "수량": qty, 
+            "단가": price, 
+            "총액": total_price, 
+            "비고": remarks
         }])
         
-        # 기존 데이터와 새 데이터를 안전하게 합치기
+        # 4. 합치기
         updated_df = pd.concat([existing_data, new_row], ignore_index=True)
         
-        # 전체 데이터로 덮어쓰기
+        # 5. 저장 (이때도 열 순서를 명확히 지정)
         conn.update(worksheet="매입자료", data=updated_df)
         
         st.success(f"✅ 저장 완료! (총액: {total_price:,}원)")
