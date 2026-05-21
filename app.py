@@ -54,37 +54,46 @@ elif menu_choice == "품목 등록":
     st.dataframe(conn.read(worksheet="품목"), use_container_width=True)
 
 # ==========================================
-# 3. 매입 자료 입력
+# 3. 매입 자료 입력 (단가 자동 불러오기 버전)
 # ==========================================
 elif menu_choice == "매입 자료 입력":
     st.title("📝 원부자재 매입 내역 등록")
     
-    # 데이터 불러오기
+    # 1. 데이터 불러오기
     df_vendors = conn.read(worksheet="거래처")
     df_items = conn.read(worksheet="품목")
     
-    # 입력 폼
+    # 💡 품목명과 단가를 매칭하는 사전(Dictionary) 만들기
+    item_price_map = dict(zip(df_items['제품명'], df_items['단가']))
+
+    # 2. 폼 바깥에서 필수 정보 선택 (그래야 단가가 바로 바뀜)
+    col1, col2 = st.columns(2)
+    with col1:
+        date = st.date_input("매입 일자")
+        vendor = st.selectbox("매입 거래처", df_vendors['거래처명'].tolist())
+        # 품목 선택
+        selected_item = st.selectbox("품목명", df_items['제품명'].tolist())
+        # 선택한 품목의 단가 가져오기 (없으면 0)
+        default_price = item_price_map.get(selected_item, 0)
+    
+    # 3. 입력 폼 (수량, 단가 등)
     with st.form("purchase_form", clear_on_submit=True):
-        col1, col2 = st.columns(2)
-        with col1:
-            date = st.date_input("매입 일자")
-            vendor = st.selectbox("매입 거래처", df_vendors['거래처명'].tolist())
-            item = st.selectbox("품목명", df_items['제품명'].tolist())
-        with col2:
+        col3, col4 = st.columns(2)
+        with col3:
             qty = st.number_input("수량", min_value=1)
-            price = st.number_input("단가", min_value=0)
-            remarks = st.text_input("비고")  # 비고 입력창
+            # 💡 위에서 가져온 단가를 기본값(value)으로 설정
+            price = st.number_input("단가", value=int(default_price), min_value=0)
+        with col4:
+            remarks = st.text_input("비고")
             submit = st.form_submit_button("입력 완료")
 
+    # 4. 저장 로직
     if submit:
-        # 총액 계산
         total_price = qty * price
-        
-        # 데이터 저장
         new_row = pd.DataFrame([{
             "매입일자": str(date), 
             "거래처": vendor, 
-            "품목명": item, 
+            "품목명": selected_item, 
             "수량": qty, 
             "단가": price, 
             "총액": total_price, 
@@ -96,5 +105,6 @@ elif menu_choice == "매입 자료 입력":
         
         st.success(f"✅ 저장 완료! (이번 입력 건 총액: **{total_price:,}원**)")
 
+    # 5. 목록 표시
     st.subheader("📊 누적 매입 내역")
     st.dataframe(conn.read(worksheet="매입자료"), use_container_width=True)
