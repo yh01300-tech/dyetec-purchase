@@ -82,7 +82,8 @@ elif menu_choice == "품목 등록":
             updated_data = pd.concat([existing_data, new_item], ignore_index=True)
             conn.update(worksheet="품목", data=updated_data)
             st.success(f"✅ [{item_name}] 구글 시트에 등록 완료되었습니다.")
-            
+            st.rerun()
+    
     st.markdown("---")
     st.subheader("📋 등록된 품목 목록")
     df_items = conn.read(worksheet="품목")
@@ -131,7 +132,8 @@ elif menu_choice == "매입 자료 입력":
             updated_data = pd.concat([existing_data, new_data], ignore_index=True)
             conn.update(worksheet="매입자료", data=updated_data)
             st.success(f"✅ [{selected_item}] 내역이 구글 시트에 안전하게 저장되었습니다!")
-
+            st.rerun()
+    
     st.markdown("---")
     st.subheader("📊 현재까지 누적된 매입 내역")
     df_records = conn.read(worksheet="매입자료")
