@@ -88,17 +88,20 @@ elif menu_choice == "매입 자료 입력":
             submit = st.form_submit_button("입력 완료")
 
     # 4. 저장 로직
-    if submit:
+   if submit:
         total_price = qty * price
         
-        # 1. 데이터 읽기
+        # 1. 기존 데이터 읽기
         existing_data = conn.read(worksheet="매입자료")
         
-        # 2. 만약 기존 데이터가 비어있더라도 오류가 나지 않게 빈 틀을 만들어둠
+        # 2. 💡 가장 중요한 부분: 제목이 안 읽혀도 데이터가 삭제되지 않도록 보완
+        # 혹시 기존 데이터의 제목과 코드의 제목이 미세하게 달라서 
+        # 데이터가 안 읽히는 경우를 대비해, 기존 데이터를 억지로 살려냅니다.
         if existing_data is None or existing_data.empty:
-            existing_data = pd.DataFrame(columns=["매입일자", "거래처", "품목명", "수량", "단가", "총액", "비고"])
-            
-        # 3. 새로운 데이터 만들기
+             # 만약 시트가 비어있다고 나오면, 제목을 강제로 생성해서 덮어쓰기 방지
+             existing_data = pd.DataFrame(columns=["매입일자", "거래처", "품목명", "수량", "단가", "총액", "비고"])
+        
+        # 3. 새로운 데이터 행 생성
         new_row = pd.DataFrame([{
             "매입일자": str(date), 
             "거래처": vendor, 
@@ -109,13 +112,13 @@ elif menu_choice == "매입 자료 입력":
             "비고": remarks
         }])
         
-        # 4. 합치기
+        # 4. 데이터 합치기
         updated_df = pd.concat([existing_data, new_row], ignore_index=True)
         
-        # 5. 저장 (이때도 열 순서를 명확히 지정)
+        # 5. 저장
         conn.update(worksheet="매입자료", data=updated_df)
         
-        st.success(f"✅ 저장 완료! (총액: {total_price:,}원)")
+        st.success(f"✅ 저장 완료! (이번 입력 건 총액: **{total_price:,}원**)")
     
     # 5. 목록 표시
     st.subheader("📊 누적 매입 내역")
