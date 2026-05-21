@@ -23,10 +23,14 @@ if menu_choice == "매입 자료 입력":
     st.title("📝 원부자재 매입 내역 등록")
     
     # 1. 데이터 로드 시도
-    df_v = load_data("거래처")
-    df_i = load_data("품목")
-    df_p = load_data("매입자료")
-    df_h = load_data("단가이력")
+    def load_data(ws):
+    try:
+        return conn.read(worksheet=ws, ttl=0)
+    except Exception as e:
+        # 에러를 숨기지 않고 화면에 보여줍니다
+        st.error(f"⚠️ 연결 오류 발생: {e}")
+        st.stop() # 프로그램이 여기서 멈추게 하여 원인을 확인합니다
+        return pd.DataFrame()
     
     # 2. 데이터 유무 확인 (디버깅)
     if df_v.empty: st.warning("⚠️ '거래처' 시트의 데이터를 찾을 수 없습니다. 시트 이름을 확인하거나 데이터를 입력해주세요.")
