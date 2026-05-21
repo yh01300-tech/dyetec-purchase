@@ -5,9 +5,35 @@ import os
 import altair as alt
 from streamlit_gsheets import GSheetsConnection
 
-# 1. 설정
+# 1. 설정 및 인쇄 전용 스타일(CSS) 적용
 st.set_page_config(page_title="현대다이텍 시스템", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
+
+# 💡 윈도우 인쇄(Ctrl+P) 시 사이드바와 버튼들을 자동으로 숨겨주는 마법의 코드입니다.
+st.markdown("""
+    <style>
+    @media print {
+        /* 사이드바 메뉴 전체 숨기기 */
+        [data-testid="stSidebar"] {
+            display: none !important;
+        }
+        /* 웹사이트 상단 여백 및 헤더 숨기기 */
+        header {
+            visibility: hidden !important;
+        }
+        /* 시스템 버튼들 숨기기 (새로고침 등) */
+        .stButton {
+            display: none !important;
+        }
+        /* 본문 내용이 종이에 꽉 차게 조절 */
+        .main .block-container {
+            padding-top: 2rem !important;
+            padding-bottom: 2rem !important;
+            max-width: 100% !important;
+        }
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 @st.cache_data(ttl=600)
 def load_data(ws):
@@ -29,7 +55,6 @@ if st.sidebar.button("🔄 시스템 새로고침 (오류 해결)"):
     st.cache_data.clear()
     st.rerun()
 
-# 💡 메뉴 선택에 '월마감 정산서'가 추가되었습니다.
 menu_choice = st.sidebar.radio(
     "메뉴 선택", 
     ("종합 대시보드", "매입 자료 입력", "거래처 등록", "품목 등록", "단가변동이력", "거래처별 내역", "월마감 정산서")
@@ -245,7 +270,7 @@ elif menu_choice == "거래처별 내역":
             st.success(f"💰 해당 기간 **{sel_vendor}**의 매입 총액: **{int(total_sum):,}원**")
 
 # ==========================================
-# 💡 7. 거래처별 월마감 대금 정산서 (신규 기능)
+# 7. 거래처별 월마감 대금 정산서
 # ==========================================
 elif menu_choice == "월마감 정산서":
     st.title("🖨️ 거래처별 월마감 대금 정산서")
@@ -259,7 +284,6 @@ elif menu_choice == "월마감 정산서":
         df['매입일자_dt'] = pd.to_datetime(df['매입일자'], errors='coerce')
         df_valid = df.dropna(subset=['매입일자_dt'])
         
-        # 데이터가 존재할 경우 년월(YYYY-MM) 리스트 추출
         if not df_valid.empty:
             df_valid['년월'] = df_valid['매입일자_dt'].dt.strftime('%Y-%m')
             ym_list = sorted(df_valid['년월'].unique(), reverse=True)
@@ -274,20 +298,17 @@ elif menu_choice == "월마감 정산서":
             sel_vendor = st.selectbox("정산 대상 거래처 선택", vendor_list if vendor_list else ["등록된 거래처 없음"])
             
         if not df_valid.empty and sel_vendor != "등록된 거래처 없음":
-            # 년월 및 거래처 동시 필터링
             filtered = df_valid[(df_valid['년월'] == sel_ym) & (df_valid['거래처'] == sel_vendor)]
             
             st.divider()
             st.subheader(f"🧾 {sel_ym} [{sel_vendor}] 물품매입대금 정산명세서")
             
-            # 불필요한 변환 열 제거 후 출력
             display_df = filtered.drop(columns=['매입일자_dt', '년월'])
             st.dataframe(display_df, use_container_width=True)
             
             if not display_df.empty and '총액' in display_df.columns:
                 total_sum = pd.to_numeric(display_df['총액'], errors='coerce').sum()
                 
-                # 명세서 스타일 포맷팅
                 st.info(f"■ {sel_ym} 마감 공급가액 합계:  **{int(total_sum):,} 원**")
                 st.success(f"🎉 위 금액을 [{sel_vendor}]의 {sel_ym} 귀속 마감 대금으로 확정합니다.")
             else:
