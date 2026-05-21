@@ -7,7 +7,6 @@ from streamlit_gsheets import GSheetsConnection
 st.set_page_config(page_title="현대다이텍 시스템", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 2. 데이터 로드 함수 (캐시 적용)
 @st.cache_data(ttl=600)
 def load_data(ws):
     try:
@@ -15,16 +14,14 @@ def load_data(ws):
     except:
         return pd.DataFrame()
 
-# 3. 사이드바 메뉴
+# 2. 사이드바
 st.sidebar.title("🏢 현대다이텍 시스템")
 menu_choice = st.sidebar.radio("메뉴 선택", ("매입 자료 입력", "거래처 등록", "품목 등록", "단가변동이력", "거래처별 내역"))
 
-# 4. 각 메뉴 기능
+# 3. 각 메뉴별 기능
 if menu_choice == "매입 자료 입력":
     st.title("📝 원부자재 매입 내역 등록")
-    df_v = load_data("거래처")
-    df_i = load_data("품목")
-    df_h = load_data("단가이력")
+    df_v, df_i, df_h = load_data("거래처"), load_data("품목"), load_data("단가이력")
     
     item_price_map = {}
     if not df_h.empty:
@@ -47,44 +44,57 @@ if menu_choice == "매입 자료 입력":
     if st.button("✅ 입력 완료"):
         df_p = load_data("매입자료")
         new_row = {"매입일자": str(date_input), "거래처": vendor, "품목명": item, "수량": qty, "단가": price, "총액": qty*price, "비고": remarks}
-        new_df = pd.DataFrame([new_row])
-        if not df_p.empty:
-            new_df = new_df[df_p.columns]
-        updated_data = pd.concat([df_p, new_df], ignore_index=True)
-        conn.update(worksheet="매입자료", data=updated_data)
-        st.cache_data.clear()
-        st.rerun()
-    st.dataframe(load_data("매입자료"), use_container_width=True)
+        updated = pd.concat([df_p, pd.DataFrame([new_row])], ignore_index=True)
+        conn.update(worksheet="매입자료", data=updated)
+        st.cache_data.clear(); st.rerun()
+    
+    st.subheader("📊 누적 매입 내역")
+    df_p = load_data("매입자료")
+    if not df_p.empty: st.dataframe(df_p, use_container_width=True)
+    else: st.info("입력된 매입 데이터가 없습니다.")
 
 elif menu_choice == "거래처 등록":
     st.title("🏢 신규 거래처 등록")
     with st.form("v_form", clear_on_submit=True):
-        v_name = st.text_input("거래처명 *")
-        v_biz = st.text_input("사업자번호")
+        v_name, v_biz = st.text_input("거래처명 *"), st.text_input("사업자번호")
         submitted = st.form_submit_button("저장")
     if submitted and v_name:
         df = load_data("거래처")
-        new_row = pd.DataFrame([{"거래처명": v_name, "사업자등록번호": v_biz}])
-        conn.update(worksheet="거래처", data=pd.concat([df, new_row], ignore_index=True))
+        conn.update(worksheet="거래처", data=pd.concat([df, pd.DataFrame([{"거래처명": v_name, "사업자등록번호": v_biz}])], ignore_index=True))
         st.cache_data.clear(); st.rerun()
-    st.dataframe(load_data("거래처"), use_container_width=True)
+    st.subheader("🏢 등록된 거래처 목록")
+    df_v = load_data("거래처")
+    if not df_v.empty: st.dataframe(df_v, use_container_width=True)
+    else: st.info("등록된 거래처가 없습니다.")
 
 elif menu_choice == "품목 등록":
     st.title("📦 품목 등록/수정")
     with st.form("i_form", clear_on_submit=True):
-        i_name = st.text_input("제품명 *")
-        i_price = st.number_input("기본 단가", min_value=0)
+        i_name, i_price = st.text_input("제품명 *"), st.number_input("기본 단가", min_value=0)
         submitted = st.form_submit_button("등록/수정")
     if submitted and i_name:
-        df = load_data("품목")
-        hist = load_data("단가이력")
-        if not df.empty and i_name in df['제품명'].values:
-            df.loc[df['제품명'] == i_name, '단가'] = i_price
-        else:
-            df = pd.concat([df, pd.DataFrame([{"제품명": i_name, "단가": i_price}])], ignore_index=True)
+        df, hist = load_data("품목"), load_data("단가이력")
+        if not df.empty and i_name in df['제품명'].values: df.loc[df['제품명'] == i_name, '단가'] = i_price
+        else: df = pd.concat([df, pd.DataFrame([{"제품명": i_name, "단가": i_price}])], ignore_index=True)
         conn.update(worksheet="품목", data=df)
-        
-        # 단가이력 업데이트 (라인을 쪼개서 에러 방지)
-        new_hist = pd.DataFrame([{"품목명": i_name, "단가": i_price, "변경일자": str(date.today())}])
-        updated_hist = pd.concat([hist, new_hist], ignore_index=True)
-        conn.update
+        conn.update(worksheet="단가이력", data=pd.concat([hist, pd.DataFrame([{"품목명": i_name, "단가": i_price, "변경일자": str(date.today())}])], ignore_index=True))
+        st.cache_data.clear(); st.rerun()
+    st.subheader("📦 현재 품목 목록")
+    df_i = load_data("품목")
+    if not df_i.empty: st.dataframe(df_i, use_container_width=True)
+    else: st.info("등록된 품목이 없습니다.")
+
+elif menu_choice == "단가변동이력":
+    st.title("📈 품목별 단가 변동 이력")
+    df = load_data("단가이력")
+    if not df.empty: st.dataframe(df, use_container_width=True)
+    else: st.info("아직 변경된 단가 이력이 없습니다.")
+
+elif menu_choice == "거래처별 내역":
+    st.title("🔍 거래처별 조회")
+    df = load_data("매입자료")
+    if not df.empty:
+        sel = st.selectbox("거래처 선택", df['거래처'].unique())
+        st.dataframe(df[df['거래처']==sel], use_container_width=True)
+    else:
+        st.info("조회할 매입 내역이 없습니다.")
