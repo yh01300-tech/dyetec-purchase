@@ -4,10 +4,10 @@ from datetime import date
 from streamlit_gsheets import GSheetsConnection
 import altair as alt
 
-# 1. 페이지 설정 및 CSS
 st.set_page_config(page_title="현대다이텍 시스템", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
+# CSS (인쇄 최적화)
 st.markdown("""
     <style>
     table { width: 100% !important; border-collapse: collapse !important; }
@@ -21,7 +21,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 2. 공통 함수
 def load_data(ws): return conn.read(worksheet=ws)
 
 if 'price' not in st.session_state: st.session_state.price = 0
@@ -35,13 +34,11 @@ def update_price():
 
 st.title("🏢 현대다이텍 시스템")
 
-# 3. 사이드바 메뉴
 menu = st.sidebar.radio("메뉴 선택", (
     "종합 대시보드", "매입 자료 입력", "거래처 등록", 
     "품목 등록", "단가변동이력", "거래처별 내역", "월마감 정산서"
 ))
 
-# 4. 전체 메뉴 로직
 if menu == "종합 대시보드":
     st.subheader("📊 월간 매입 종합 대시보드")
     df = load_data("매입자료")
@@ -50,14 +47,11 @@ if menu == "종합 대시보드":
         t = date.today()
         curr = df[(df['매입일자'].dt.month == t.month) & (df['매입일자'].dt.year == t.year)]
         prev_m = 12 if t.month == 1 else t.month - 1
-        prev_y = t.year if t.month != 1 else t.year - 1
-        prev = df[(df['매입일자'].dt.month == prev_m) & (df['매입일자'].dt.year == prev_y)]
-        
+        prev = df[(df['매입일자'].dt.month == prev_m)]
         c1, c2, c3 = st.columns(3)
         c1.metric("이번 달 총 매입액", f"{int(curr['총액'].sum()):,} 원", f"전월 대비 {int(curr['총액'].sum() - prev['총액'].sum()):,} 원")
         c2.metric("이번 달 매입 건수", f"{len(curr)} 건")
         if not curr.empty: c3.metric("최다 매입 거래처", curr.groupby('거래처')['총액'].sum().idxmax())
-        
         st.subheader("🏆 거래처별 매입 비중")
         chart = alt.Chart(curr.groupby('거래처')['총액'].sum().reset_index()).mark_bar().encode(
             x=alt.X('거래처', axis=alt.Axis(labelAngle=0)), y='총액'
@@ -87,19 +81,27 @@ elif menu == "거래처 등록":
     mode = st.radio("작업", ["신규 등록", "정보 수정"], horizontal=True)
     df_v = load_data("거래처")
     if mode == "신규 등록":
-        n = st.text_input("거래처명"); b = st.text_input("사업자번호")
+        c1, c2 = st.columns(2)
+        n = c1.text_input("거래처명"); b = c1.text_input("사업자번호")
+        p1 = c1.text_input("연락처1"); p2 = c2.text_input("연락처2")
+        fax = c2.text_input("팩스번호"); rem = c2.text_input("비고")
         if st.button("💾 저장"):
             df = conn.read(worksheet="거래처")
-            conn.update(worksheet="거래처", data=pd.concat([df, pd.DataFrame([{"거래처명":n, "사업자등록번호":b}])], ignore_index=True))
+            conn.update(worksheet="거래처", data=pd.concat([df, pd.DataFrame([{"거래처명":n, "사업자등록번호":b, "연락처1":p1, "연락처2":p2, "팩스번호":fax, "비고":rem}])], ignore_index=True))
             st.rerun()
     else:
         target = st.selectbox("거래처 선택", df_v['거래처명'].tolist())
-        n = st.text_input("거래처명", value=target)
-        b = st.text_input("사업자번호", value=df_v[df_v['거래처명']==target].iloc[0]['사업자등록번호'])
+        row = df_v[df_v['거래처명'] == target].iloc[0]
+        c1, c2 = st.columns(2)
+        new_n = c1.text_input("거래처명", value=row['거래처명']); new_b = c1.text_input("사업자번호", value=row['사업자등록번호'])
+        new_p1 = c1.text_input("연락처1", value=row['연락처1']); new_p2 = c2.text_input("연락처2", value=row['연락처2'])
+        new_fax = c2.text_input("팩스번호", value=row['팩스번호']); new_rem = c2.text_input("비고", value=row['비고'])
         if st.button("💾 수정 저장"):
             df = conn.read(worksheet="거래처")
             idx = df.index[df['거래처명'] == target][0]
-            df.at[idx, '거래처명'] = n; df.at[idx, '사업자등록번호'] = b
+            df.at[idx, '거래처명'] = new_n; df.at[idx, '사업자등록번호'] = new_b
+            df.at[idx, '연락처1'] = new_p1; df.at[idx, '연락처2'] = new_p2
+            df.at[idx, '팩스번호'] = new_fax; df.at[idx, '비고'] = new_rem
             conn.update(worksheet="거래처", data=df)
             st.rerun()
     st.dataframe(df_v)
@@ -130,14 +132,12 @@ elif menu == "품목 등록":
 elif menu == "단가변동이력":
     st.subheader("📈 단가 변동 이력")
     st.dataframe(load_data("단가이력"))
-
 elif menu == "거래처별 내역":
     st.subheader("🔍 거래처별 내역 조회")
     df = load_data("매입자료")
     v = st.selectbox("거래처 선택", ["전체"] + df['거래처'].unique().tolist())
     if v != "전체": df = df[df['거래처'] == v]
     st.dataframe(df.sort_values('매입일자', ascending=False))
-
 elif menu == "월마감 정산서":
     st.title("🖨️ 월마감 정산서")
     df = load_data("매입자료")
