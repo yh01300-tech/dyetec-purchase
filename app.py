@@ -22,19 +22,25 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 2. 데이터 로드 함수 (실시간 데이터 조회)
+# 2. 데이터 로드 함수
 def load_data(ws): 
     try: return conn.read(worksheet=ws, ttl=0)
     except: return pd.DataFrame()
 
-# 단가 자동 반영 콜백
+# 단가 자동 반영 콜백 (콤마, 문자, 빈칸 완벽 방어)
 def on_item_change():
     item = st.session_state.item_select
     df_i = load_data("품목")
     if not df_i.empty and '제품명' in df_i.columns:
         match = df_i[df_i['제품명'] == item]
         if not match.empty:
-            st.session_state.price_input = int(match.iloc[0]['단가'])
+            raw_price = match.iloc[0]['단가']
+            try:
+                # 콤마, 원, 공백 등을 모두 제거하고 숫자로 변환
+                clean_price = str(raw_price).replace(',', '').replace('원', '').strip()
+                st.session_state.price_input = int(float(clean_price))
+            except Exception:
+                st.session_state.price_input = 0
         else:
             st.session_state.price_input = 0
     else:
@@ -78,9 +84,15 @@ elif menu == "매입 자료 입력":
     st.subheader("📝 원부자재 매입 내역 등록")
     df_v, df_i = load_data("거래처"), load_data("품목")
     
+    # 단가 입력값 세션 초기화
     if 'price_input' not in st.session_state:
         if not df_i.empty and '단가' in df_i.columns:
-            st.session_state.price_input = int(df_i.iloc[0]['단가'])
+            try:
+                raw_p = df_i.iloc[0]['단가']
+                clean_p = str(raw_p).replace(',', '').replace('원', '').strip()
+                st.session_state.price_input = int(float(clean_p))
+            except Exception:
+                st.session_state.price_input = 0
         else:
             st.session_state.price_input = 0
 
@@ -148,7 +160,7 @@ elif menu == "품목 등록":
         if target:
             row = df_i[df_i['제품명']==target].iloc[0]
             new_v = st.selectbox("거래처 변경", df_v['거래처명'].tolist() if not df_v.empty else [], index=df_v['거래처명'].tolist().index(row['주거래처']) if row['주거래처'] in df_v['거래처명'].tolist() else 0)
-            new_p = st.number_input("단가 변경", value=int(row['단가']))
+            new_p = st.number_input("단가 변경", value=int(row['단가']) if pd.notna(row['단가']) else 0)
             if st.button("💾 수정 완료"):
                 df = conn.read(worksheet="품목", ttl=0)
                 idx = df.index[df['제품명'] == target][0]
@@ -192,7 +204,6 @@ elif menu == "거래처별 내역":
             start_d = date_range[0]
             df = df[df['매입일자'].dt.date >= start_d]
             
-        # 화면에 깔끔하게 보여주기 위해 날짜 포맷 변경
         df['매입일자'] = df['매입일자'].dt.strftime('%Y-%m-%d')
         
         st.markdown(f"**총 조회 건수: {len(df)} 건** | **총 합계 금액: {int(df['총액'].sum()) if not df.empty else 0:,} 원**")
