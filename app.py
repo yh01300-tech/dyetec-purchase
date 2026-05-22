@@ -8,7 +8,7 @@ import altair as alt
 st.set_page_config(page_title="현대다이텍 시스템", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 2. 인쇄 최적화 CSS (데이터 정산서 외 제목/UI 완벽 차단)
+# 2. 인쇄 최적화 CSS
 st.markdown("""
     <style>
     table { width: 100% !important; max-width: 100% !important; border-collapse: collapse !important; table-layout: auto !important; }
@@ -36,7 +36,7 @@ def load_data(ws):
 
 st.title("🏢 현대다이텍 시스템")
 
-# 4. 사이드바 메뉴 (7개 메뉴 복구)
+# 4. 사이드바 메뉴
 if st.sidebar.button("🔄 시스템 새로고침"): st.cache_data.clear(); st.rerun()
 menu = st.sidebar.radio("메뉴 선택", (
     "종합 대시보드", "매입 자료 입력", "거래처 등록", 
@@ -57,7 +57,7 @@ if menu == "종합 대시보드":
         c1.metric("이번 달 총 매입액", f"{int(curr['총액'].sum()):,} 원", f"전월 대비 {int(curr['총액'].sum() - prev['총액'].sum()):,} 원")
         c2.metric("이번 달 매입 건수", f"{len(curr)} 건")
         if not curr.empty: c3.metric("최다 매입 거래처", curr.groupby('거래처')['총액'].sum().idxmax())
-        st.subheader("🏆 거래처별 매입 비중 (가로 배열)")
+        st.subheader("🏆 거래처별 매입 비중")
         if not curr.empty:
             chart = alt.Chart(curr.groupby('거래처')['총액'].sum().reset_index()).mark_bar().encode(
                 x=alt.X('거래처', axis=alt.Axis(labelAngle=0)), y='총액'
@@ -102,7 +102,7 @@ elif menu == "거래처 등록":
     st.dataframe(df_v, use_container_width=True)
 
 elif menu == "품목 등록":
-    st.subheader("📦 품목 등록 / 수정 및 단가 조회")
+    st.subheader("📦 품목 등록 / 수정")
     mode = st.radio("작업", ["신규 등록", "정보 수정", "조회"], horizontal=True)
     df_i, df_v = load_data("품목"), load_data("거래처")
     if mode in ["신규 등록", "정보 수정"]:
@@ -110,12 +110,12 @@ elif menu == "품목 등록":
             if mode == "정보 수정":
                 target = st.selectbox("수정할 품목 선택", df_i['제품명'].tolist())
                 row = df_i[df_i['제품명']==target].iloc[0]
-                st.text_input("품목명 (수정 불가)", value=target, disabled=True)
+                n = st.text_input("품목명", value=target)
                 opts = df_v['거래처명'].tolist(); v = st.selectbox("변경할 주 거래처", opts, index=opts.index(row['주거래처']) if row['주거래처'] in opts else 0)
                 p = st.number_input("변경할 단가", value=int(row['단가']))
                 if st.form_submit_button("💾 수정 완료"):
                     idx = df_i.index[df_i['제품명'] == target][0]
-                    df_i.at[idx, '주거래처'] = v; df_i.at[idx, '단가'] = p
+                    df_i.at[idx, '제품명'] = n; df_i.at[idx, '주거래처'] = v; df_i.at[idx, '단가'] = p
                     conn.update(worksheet="품목", data=df_i)
                     st.rerun()
             else:
@@ -126,7 +126,7 @@ elif menu == "품목 등록":
     elif mode == "조회":
         q = st.text_input("🔎 품명 검색")
         if q: df_i = df_i[df_i['제품명'].str.contains(q)]
-    st.markdown("---"); st.subheader("📋 전체 품목 내역"); st.dataframe(df_i, use_container_width=True)
+    st.markdown("---"); st.dataframe(df_i, use_container_width=True)
 
 elif menu == "단가변동이력":
     st.subheader("📈 단가 변동 전체 이력")
@@ -156,8 +156,7 @@ elif menu == "월마감 정산서":
         ym = st.selectbox("월", sorted(df['매입일자'].dt.strftime('%Y-%m').unique().tolist(), reverse=True))
         v = st.selectbox("거래처", df['거래처'].unique().tolist())
         f = df[(df['매입일자'].dt.strftime('%Y-%m') == ym) & (df['거래처'] == v)].sort_values('매입일자')
-        
         f['매입일자'] = f['매입일자'].dt.strftime('%Y-%m-%d')
         f_print = f[['매입일자', '거래처', '품목명', '수량', '단가', '총액', '비고']].copy()
         f_print.columns = ['거래일', '거래처', '품목', '수량', '단가', '합계', '비고']
-        st.markdown(f"<div id='printable-area'>{f_print.to_html(index=False)}<h3>TOTAL금액: {int(f['총액'].sum()):,} 원</h3></div>", unsafe_allow_html=True)
+        st.markdown(f"<div id='printable-area'>{f_print.to_html(index=False)}<div style='font-size:16px; font-weight:bold; margin-top:10px;'>TOTAL금액: {int(f['총액'].sum()):,} 원</div></div>", unsafe_allow_html=True)
