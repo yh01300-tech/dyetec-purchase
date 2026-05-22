@@ -55,7 +55,7 @@ if menu == "종합 대시보드":
         c1.metric("이번 달 총 매입액", f"{int(curr['총액'].sum()):,} 원", f"전월 대비 {int(curr['총액'].sum() - prev['총액'].sum()):,} 원")
         c2.metric("이번 달 매입 건수", f"{len(curr)} 건")
         if not curr.empty: c3.metric("최다 매입 거래처", curr.groupby('거래처')['총액'].sum().idxmax())
-        st.subheader("🏆 거래처별 매입 비중 (가로 배열)")
+        st.subheader("🏆 거래처별 매입 비중")
         if not curr.empty:
             chart = alt.Chart(curr.groupby('거래처')['총액'].sum().reset_index()).mark_bar().encode(
                 x=alt.X('거래처', axis=alt.Axis(labelAngle=0)), y='총액'
