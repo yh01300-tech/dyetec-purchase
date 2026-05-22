@@ -77,7 +77,13 @@ elif menu == "매입 자료 입력":
         conn.update(worksheet="매입자료", data=pd.concat([df, new_row], ignore_index=True))
         st.success("등록 완료")
         st.rerun()
-    st.dataframe(load_data("매입자료").tail(10))
+    
+    st.markdown("---")
+    st.subheader("📋 전체 매입 내역")
+    df_display = load_data("매입자료")
+    if not df_display.empty:
+        df_display['매입일자'] = pd.to_datetime(df_display['매입일자'], errors='coerce')
+        st.dataframe(df_display.sort_values('매입일자', ascending=False), use_container_width=True)
 
 elif menu == "거래처 등록":
     st.subheader("🏢 거래처 등록 및 정보 수정")
