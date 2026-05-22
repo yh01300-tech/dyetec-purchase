@@ -2,11 +2,12 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 from streamlit_gsheets import GSheetsConnection
+import altair as alt
 
 st.set_page_config(page_title="현대다이텍 시스템", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 1. CSS (인쇄 최적화)
+# CSS (인쇄 최적화)
 st.markdown("""
     <style>
     table { width: 100% !important; border-collapse: collapse !important; }
@@ -20,26 +21,20 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 2. 데이터 관리
 def load_data(ws): 
     try: return conn.read(worksheet=ws)
     except: return pd.DataFrame()
 
-# 단가 자동 반영용 세션 및 안전한 업데이트 함수
+# 단가 자동 반영용 세션 및 콜백
 if 'price' not in st.session_state: st.session_state.price = 0
 
 def update_price():
     item = st.session_state.item_select
     df_i = load_data("품목")
-    # 안전 장치: 데이터가 있고, 해당 품목이 존재하는지 먼저 확인
-    if not df_i.empty and '제품명' in df_i.columns:
+    if not df_i.empty and '제품명' in df_i.columns and item in df_i['제품명'].values:
         match = df_i[df_i['제품명'] == item]
-        if not match.empty:
-            st.session_state.price = int(match.iloc[0]['단가'])
-        else:
-            st.session_state.price = 0
-    else:
-        st.session_state.price = 0
+        st.session_state.price = int(match.iloc[0]['단가'])
+    else: st.session_state.price = 0
 
 st.title("🏢 현대다이텍 시스템")
 
@@ -48,7 +43,7 @@ menu = st.sidebar.radio("메뉴 선택", (
     "품목 등록", "단가변동이력", "거래처별 내역", "월마감 정산서"
 ))
 
-# 3. 메뉴별 기능
+# 대시보드 (요청하신 구성 복구)
 if menu == "종합 대시보드":
     st.subheader("📊 월간 매입 종합 대시보드")
     df = load_data("매입자료")
@@ -56,15 +51,26 @@ if menu == "종합 대시보드":
         df['매입일자'] = pd.to_datetime(df['매입일자'], errors='coerce')
         t = date.today()
         curr = df[(df['매입일자'].dt.month == t.month) & (df['매입일자'].dt.year == t.year)]
-        c1, c2 = st.columns(2)
-        c1.metric("이번 달 총 매입액", f"{int(curr['총액'].sum()):,} 원")
+        prev_m = 12 if t.month == 1 else t.month - 1
+        prev_y = t.year if t.month != 1 else t.year - 1
+        prev = df[(df['매입일자'].dt.month == prev_m) & (df['매입일자'].dt.year == prev_y)]
+        
+        c1, c2, c3 = st.columns(3)
+        diff = int(curr['총액'].sum() - prev['총액'].sum())
+        c1.metric("이번 달 총 매입액", f"{int(curr['총액'].sum()):,} 원", f"전월 대비 {diff:,} 원")
         c2.metric("이번 달 매입 건수", f"{len(curr)} 건")
-        st.dataframe(curr, use_container_width=True)
+        if not curr.empty:
+            c3.metric("최다 매입 거래처", curr.groupby('거래처')['총액'].sum().idxmax())
+            st.subheader("🏆 거래처별 매입 비중")
+            chart = alt.Chart(curr.groupby('거래처')['총액'].sum().reset_index()).mark_bar().encode(
+                x=alt.X('거래처', axis=alt.Axis(labelAngle=0)), y='총액'
+            )
+            st.altair_chart(chart, use_container_width=True)
 
+# 기타 메뉴 (폼 제거 및 안정화)
 elif menu == "매입 자료 입력":
     st.subheader("📝 원부자재 매입 내역 등록")
     df_v, df_i = load_data("거래처"), load_data("품목")
-    
     c1, c2 = st.columns(2)
     d = c1.date_input("매입 일자")
     v = c1.selectbox("거래처", df_v['거래처명'].tolist() if not df_v.empty else [])
@@ -72,7 +78,6 @@ elif menu == "매입 자료 입력":
     q = c2.number_input("수량", 1)
     p = c2.number_input("단가", value=st.session_state.price)
     rem = st.text_input("비고")
-    
     if st.button("✅ 내역 등록"):
         df = conn.read(worksheet="매입자료")
         new_row = pd.DataFrame([{"매입일자":str(d), "거래처":v, "품목명":i, "수량":q, "총액":q*p, "비고":rem}])
@@ -134,6 +139,8 @@ elif menu == "품목 등록":
             st.rerun()
     st.dataframe(df_i)
 
+elif menu == "단가변동이력": st.dataframe(load_data("단가이력"))
+elif menu == "거래처별 내역": st.dataframe(load_data("매입자료"))
 elif menu == "월마감 정산서":
     st.title("🖨️ 월마감 정산서")
     df = load_data("매입자료")
@@ -146,6 +153,3 @@ elif menu == "월마감 정산서":
         f_print = f[['매입일자', '거래처', '품목명', '수량', '단가', '총액', '비고']].copy()
         f_print.columns = ['거래일', '거래처', '품목', '수량', '단가', '합계', '비고']
         st.markdown(f"<div id='printable-area'>{f_print.to_html(index=False)}<div style='font-size:16px; font-weight:bold; margin-top:10px;'>토탈금액: {int(f['총액'].sum()):,} 원</div></div>", unsafe_allow_html=True)
-# 나머지 메뉴 동일
-elif menu == "단가변동이력": st.dataframe(load_data("단가이력"))
-elif menu == "거래처별 내역": st.dataframe(load_data("매입자료"))
