@@ -20,7 +20,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 3. 데이터 로드 및 정제
+# 3. 데이터 로드 및 정제 함수
 @st.cache_data(ttl=60)
 def load_data(ws):
     try: 
@@ -31,16 +31,17 @@ def load_data(ws):
         return df
     except: return pd.DataFrame()
 
+# 4. 공통 상단 제목
 st.title("🏢 현대다이텍 시스템")
 
-# 4. 사이드바 메뉴 (8개 전 항목 유지)
+# 5. 사이드바 메뉴 (8개 전 항목 유지)
 if st.sidebar.button("🔄 시스템 새로고침"): st.cache_data.clear(); st.rerun()
 menu = st.sidebar.radio("메뉴 선택", (
     "종합 대시보드", "단가 검색", "매입 자료 입력", "거래처 등록", 
     "품목 등록", "단가변동이력", "거래처별 내역", "월마감 정산서"
 ))
 
-# 5. 각 메뉴별 상세 구현
+# 6. 각 메뉴별 상세 구현
 if menu == "종합 대시보드":
     st.subheader("📊 월간 매입 종합 대시보드")
     df = load_data("매입자료")
@@ -50,6 +51,7 @@ if menu == "종합 대시보드":
         curr = df[(df['매입일자'].dt.month == t.month) & (df['매입일자'].dt.year == t.year)]
         prev_m = 12 if t.month == 1 else t.month - 1
         prev = df[df['매입일자'].dt.month == prev_m]
+        
         c1, c2, c3 = st.columns(3)
         c1.metric("이번 달 총 매입액", f"{int(curr['총액'].sum()):,} 원", f"전월 대비 {int(curr['총액'].sum() - prev['총액'].sum()):,} 원")
         c2.metric("이번 달 매입 건수", f"{len(curr)} 건")
@@ -58,23 +60,25 @@ if menu == "종합 대시보드":
         if not curr.empty: st.bar_chart(curr.groupby('거래처')['총액'].sum())
 
 elif menu == "단가 검색":
-    st.subheader("🔎 품명별 단가 조회")
+    st.subheader("🔎 품명별 단가 상세 조회")
     df_h = load_data("단가이력")
     if not df_h.empty:
-        # 품명 필터
+        # 데이터 정제: '주거래처' 또는 '거래처' 컬럼을 찾아 '주거래처'로 통일
+        target_v_col = '주거래처' if '주거래처' in df_h.columns else '거래처' if '거래처' in df_h.columns else None
+        target_d_col = '변경일자' if '변경일자' in df_h.columns else '변동일' if '변동일' in df_h.columns else None
+        
+        # 필터 설정
         sel_i = st.selectbox("품목명 선택", ["전체"] + df_h['품목명'].unique().tolist())
         df_f = df_h.copy()
         if sel_i != "전체": df_f = df_f[df_f['품목명'] == sel_i]
         
-        # 출력항목 설정: 품목명, 단가, 주거래처, 변경일자 포함
-        # 컬럼 존재 확인 후 출력
-        cols = ['품목명', '단가']
-        if '주거래처' in df_f.columns: cols.append('주거래처')
-        elif '거래처' in df_f.columns: cols.append('거래처')
-        if '변경일자' in df_f.columns: cols.append('변경일자')
+        # 표시할 컬럼 정의 및 명칭 변경
+        cols_to_show = {'품목명': '품목', '단가': '단가'}
+        if target_v_col: cols_to_show[target_v_col] = '주거래처'
+        if target_d_col: cols_to_show[target_d_col] = '변동일'
         
-        res = df_f[cols].copy()
-        st.dataframe(res.sort_values(by='변경일자' if '변경일자' in res.columns else cols[0], ascending=False), use_container_width=True)
+        res = df_f[list(cols_to_show.keys())].rename(columns=cols_to_show)
+        st.dataframe(res.sort_values(by='변동일' if '변동일' in res.columns else '품목', ascending=False), use_container_width=True)
 
 elif menu == "매입 자료 입력":
     st.subheader("📝 원부자재 매입 내역 등록")
