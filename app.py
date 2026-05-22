@@ -58,21 +58,23 @@ if menu == "종합 대시보드":
         if not curr.empty: st.bar_chart(curr.groupby('거래처')['총액'].sum())
 
 elif menu == "단가 검색":
-    st.subheader("🔎 품명 및 거래처별 단가 조회")
+    st.subheader("🔎 품명별 단가 조회")
     df_h = load_data("단가이력")
     if not df_h.empty:
-        v_col = '거래처' if '거래처' in df_h.columns else '주거래처' if '주거래처' in df_h.columns else None
-        c1, c2 = st.columns(2)
-        sel_i = c1.selectbox("품목명 선택", ["전체"] + df_h['품목명'].unique().tolist())
-        sel_v = c2.selectbox("거래처 선택", ["전체"] + (df_h[v_col].unique().tolist() if v_col else []))
-        
+        # 품명 필터
+        sel_i = st.selectbox("품목명 선택", ["전체"] + df_h['품목명'].unique().tolist())
         df_f = df_h.copy()
         if sel_i != "전체": df_f = df_f[df_f['품목명'] == sel_i]
-        if v_col and sel_v != "전체": df_f = df_f[df_f[v_col] == sel_v]
         
-        res = df_f[['품목명', '단가', '변경일자']].copy()
-        res.columns = ['품목', '단가', '변동일']
-        st.dataframe(res.sort_values('변동일', ascending=False), use_container_width=True)
+        # 출력항목 설정: 품목명, 단가, 주거래처, 변경일자 포함
+        # 컬럼 존재 확인 후 출력
+        cols = ['품목명', '단가']
+        if '주거래처' in df_f.columns: cols.append('주거래처')
+        elif '거래처' in df_f.columns: cols.append('거래처')
+        if '변경일자' in df_f.columns: cols.append('변경일자')
+        
+        res = df_f[cols].copy()
+        st.dataframe(res.sort_values(by='변경일자' if '변경일자' in res.columns else cols[0], ascending=False), use_container_width=True)
 
 elif menu == "매입 자료 입력":
     st.subheader("📝 원부자재 매입 내역 등록")
@@ -119,7 +121,7 @@ elif menu == "품목 등록":
         target = st.selectbox("품목 선택", df_i['제품명'].tolist()) if mode=="정보 수정" else None
         row = df_i[df_i['제품명']==target].iloc[0] if target else {}
         n = st.text_input("품목명", value=row.get('제품명',''))
-        v = st.selectbox("주 거래처", df_v['거래처명'].tolist(), index=df_v['거래처명'].tolist().index(row.get('주거래처')) if row.get('주거래처') in df_v['거래처명'].tolist() else 0)
+        opts = df_v['거래처명'].tolist(); v = st.selectbox("주 거래처", opts, index=opts.index(row.get('주거래처')) if row.get('주거래처') in opts else 0)
         p = st.number_input("단가", value=int(row.get('단가', 0)))
         if st.form_submit_button("💾 저장"):
             if mode=="신규 등록": conn.update("품목", pd.concat([df_i, pd.DataFrame([{"제품명":n, "주거래처":v, "단가":p}])], ignore_index=True))
