@@ -8,16 +8,15 @@ import altair as alt
 st.set_page_config(page_title="현대다이텍 시스템", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 2. 화면 및 인쇄 최적화 CSS
+# 2. 인쇄 최적화 CSS (데이터 정산서 외 제목/UI 완벽 차단)
 st.markdown("""
     <style>
     table { width: 100% !important; max-width: 100% !important; border-collapse: collapse !important; table-layout: auto !important; }
     th, td { border: 1px solid black !important; padding: 8px !important; text-align: center !important; }
     @media print {
         [data-testid="stSidebar"], .stAppHeader, .stButton, .stForm, .stRadio, .stMetric, .stInfo { display: none !important; }
+        h1, h2, h3, h4, h5, h6 { display: none !important; } 
         #printable-area { display: block !important; width: 100% !important; margin: 0 !important; padding: 5px !important; }
-        h2 { display: none !important; }
-        h3 { font-size: 14px !important; margin: 10px 0 !important; }
         table { font-size: 9pt !important; }
         td, th { padding: 3px 5px !important; }
     }
@@ -37,7 +36,7 @@ def load_data(ws):
 
 st.title("🏢 현대다이텍 시스템")
 
-# 4. 사이드바 메뉴
+# 4. 사이드바 메뉴 (7개 메뉴 복구)
 if st.sidebar.button("🔄 시스템 새로고침"): st.cache_data.clear(); st.rerun()
 menu = st.sidebar.radio("메뉴 선택", (
     "종합 대시보드", "매입 자료 입력", "거래처 등록", 
@@ -158,8 +157,7 @@ elif menu == "월마감 정산서":
         v = st.selectbox("거래처", df['거래처'].unique().tolist())
         f = df[(df['매입일자'].dt.strftime('%Y-%m') == ym) & (df['거래처'] == v)].sort_values('매입일자')
         
-        # '매입일자'를 문자열로 변환하여 출력
         f['매입일자'] = f['매입일자'].dt.strftime('%Y-%m-%d')
         f_print = f[['매입일자', '거래처', '품목명', '수량', '단가', '총액', '비고']].copy()
         f_print.columns = ['거래일', '거래처', '품목', '수량', '단가', '합계', '비고']
-        st.markdown(f"<div id='printable-area'>{f_print.to_html(index=False)}<h3>토탈금액: {int(f['총액'].sum()):,} 원</h3></div>", unsafe_allow_html=True)
+        st.markdown(f"<div id='printable-area'>{f_print.to_html(index=False)}<h3>TOTAL금액: {int(f['총액'].sum()):,} 원</h3></div>", unsafe_allow_html=True)
