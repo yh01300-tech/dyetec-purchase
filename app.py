@@ -5,9 +5,9 @@ from streamlit_gsheets import GSheetsConnection
 import altair as alt
 
 st.set_page_config(page_title="현대다이텍 시스템", layout="wide")
-conn = st.connection("gsheets", type=GSheetsConnection)
+conn = conn = st.connection("gsheets", type=GSheetsConnection)
 
-# CSS (인쇄 최적화)
+# 1. CSS (인쇄 최적화)
 st.markdown("""
     <style>
     table { width: 100% !important; border-collapse: collapse !important; }
@@ -21,20 +21,29 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# 2. 데이터 관리
 def load_data(ws): 
     try: return conn.read(worksheet=ws)
     except: return pd.DataFrame()
 
-# 단가 자동 반영용 세션 및 콜백
+# 단가 자동 반영용 세션 및 오류 방지 업데이트 함수
 if 'price' not in st.session_state: st.session_state.price = 0
 
 def update_price():
-    item = st.session_state.item_select
+    item = st.session_state.get('item_select')
+    if not item: return
     df_i = load_data("품목")
-    if not df_i.empty and '제품명' in df_i.columns and item in df_i['제품명'].values:
+    if not df_i.empty and '제품명' in df_i.columns:
         match = df_i[df_i['제품명'] == item]
-        st.session_state.price = int(match.iloc[0]['단가'])
-    else: st.session_state.price = 0
+        if not match.empty:
+            try:
+                st.session_state.price = int(match.iloc[0]['단가'])
+            except:
+                st.session_state.price = 0
+        else:
+            st.session_state.price = 0
+    else:
+        st.session_state.price = 0
 
 st.title("🏢 현대다이텍 시스템")
 
@@ -43,7 +52,7 @@ menu = st.sidebar.radio("메뉴 선택", (
     "품목 등록", "단가변동이력", "거래처별 내역", "월마감 정산서"
 ))
 
-# 대시보드 (요청하신 구성 복구)
+# 3. 메뉴별 기능 구현
 if menu == "종합 대시보드":
     st.subheader("📊 월간 매입 종합 대시보드")
     df = load_data("매입자료")
@@ -52,22 +61,17 @@ if menu == "종합 대시보드":
         t = date.today()
         curr = df[(df['매입일자'].dt.month == t.month) & (df['매입일자'].dt.year == t.year)]
         prev_m = 12 if t.month == 1 else t.month - 1
-        prev_y = t.year if t.month != 1 else t.year - 1
-        prev = df[(df['매입일자'].dt.month == prev_m) & (df['매입일자'].dt.year == prev_y)]
-        
+        prev = df[(df['매입일자'].dt.month == prev_m)]
         c1, c2, c3 = st.columns(3)
-        diff = int(curr['총액'].sum() - prev['총액'].sum())
-        c1.metric("이번 달 총 매입액", f"{int(curr['총액'].sum()):,} 원", f"전월 대비 {diff:,} 원")
+        c1.metric("이번 달 총 매입액", f"{int(curr['총액'].sum()):,} 원", f"전월 대비 {int(curr['총액'].sum() - prev['총액'].sum()):,} 원")
         c2.metric("이번 달 매입 건수", f"{len(curr)} 건")
-        if not curr.empty:
-            c3.metric("최다 매입 거래처", curr.groupby('거래처')['총액'].sum().idxmax())
-            st.subheader("🏆 거래처별 매입 비중")
-            chart = alt.Chart(curr.groupby('거래처')['총액'].sum().reset_index()).mark_bar().encode(
-                x=alt.X('거래처', axis=alt.Axis(labelAngle=0)), y='총액'
-            )
-            st.altair_chart(chart, use_container_width=True)
+        if not curr.empty: c3.metric("최다 매입 거래처", curr.groupby('거래처')['총액'].sum().idxmax())
+        st.subheader("🏆 거래처별 매입 비중")
+        chart = alt.Chart(curr.groupby('거래처')['총액'].sum().reset_index()).mark_bar().encode(
+            x=alt.X('거래처', axis=alt.Axis(labelAngle=0)), y='총액'
+        )
+        st.altair_chart(chart, use_container_width=True)
 
-# 기타 메뉴 (폼 제거 및 안정화)
 elif menu == "매입 자료 입력":
     st.subheader("📝 원부자재 매입 내역 등록")
     df_v, df_i = load_data("거래처"), load_data("품목")
