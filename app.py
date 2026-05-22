@@ -2,14 +2,14 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 import os
+import altair as alt
 import streamlit.components.v1 as components
 from streamlit_gsheets import GSheetsConnection
 
-# 1. 페이지 설정 및 인쇄 최적화 스타일
+# 1. 설정 및 인쇄 전용 스타일(CSS)
 st.set_page_config(page_title="현대다이텍 시스템", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 인쇄 시 불필요한 UI 숨기기
 st.markdown("""
     <style>
     @media print {
@@ -57,8 +57,16 @@ if menu == "종합 대시보드":
         c1.metric("이번 달 총 매입액", f"{int(curr['총액'].sum()):,} 원", f"전월 대비 {int(curr['총액'].sum() - prev['총액'].sum()):,} 원")
         c2.metric("이번 달 매입 건수", f"{len(curr)} 건")
         if not curr.empty: c3.metric("최다 매입 거래처", curr.groupby('거래처')['총액'].sum().idxmax())
-        st.subheader("🏆 거래처별 매입 비중")
-        if not curr.empty: st.bar_chart(curr.groupby('거래처')['총액'].sum())
+        
+        st.subheader("🏆 거래처별 매입 비중 (가로 배열)")
+        if not curr.empty:
+            chart_data = curr.groupby('거래처')['총액'].sum().reset_index()
+            # labelAngle=0으로 고정하여 가로 배열 적용
+            chart = alt.Chart(chart_data).mark_bar().encode(
+                x=alt.X('거래처', axis=alt.Axis(labelAngle=0)), 
+                y='총액'
+            )
+            st.altair_chart(chart, use_container_width=True)
     else: st.info("매입 자료가 없습니다.")
 
 elif menu == "단가 검색":
@@ -75,17 +83,12 @@ elif menu == "매입 자료 입력":
     df_v = load_data("거래처"); df_i = load_data("품목")
     with st.form("buy_form", clear_on_submit=True):
         c1, c2 = st.columns(2)
-        d = c1.date_input("매입 일자")
-        v = c1.selectbox("거래처", df_v['거래처명'].tolist() if not df_v.empty else [])
-        i = c2.selectbox("품목명", df_i['제품명'].tolist() if not df_i.empty else [])
-        q = c2.number_input("수량", min_value=1)
-        p = c2.number_input("단가", min_value=0)
-        rem = st.text_input("비고")
-        sub = st.form_submit_button("✅ 내역 등록")
+        d = c1.date_input("매입 일자"); v = c1.selectbox("거래처", df_v['거래처명'].tolist() if not df_v.empty else [])
+        i = c2.selectbox("품목명", df_i['제품명'].tolist() if not df_i.empty else []); q = c2.number_input("수량", min_value=1); p = c2.number_input("단가", min_value=0)
+        rem = st.text_input("비고"); sub = st.form_submit_button("✅ 내역 등록")
     if sub:
         df = load_data("매입자료")
-        new_row = pd.DataFrame([{"매입일자":str(d), "거래처":v, "품목명":i, "수량":q, "단가":p, "총액":q*p, "비고":rem}])
-        conn.update("매입자료", pd.concat([df, new_row], ignore_index=True))
+        conn.update("매입자료", pd.concat([df, pd.DataFrame([{"매입일자":str(d), "거래처":v, "품목명":i, "수량":q, "단가":p, "총액":q*p, "비고":rem}])], ignore_index=True))
         st.success("등록 완료!"); st.rerun()
     st.dataframe(load_data("매입자료").tail(10), use_container_width=True)
 
@@ -99,9 +102,8 @@ elif menu == "거래처 등록":
         d = df_v[df_v['거래처명'] == sel].iloc[0].to_dict()
     with st.form("v_form", clear_on_submit=True):
         c1, c2 = st.columns(2)
-        n = c1.text_input("거래처명", value=d.get('거래처명', '')); biz = c1.text_input("사업자번호", value=d.get('사업자등록번호', ''))
-        p1 = c1.text_input("연락처1", value=d.get('연락처1', '')); p2 = c2.text_input("연락처2", value=d.get('연락처2', ''))
-        fax = c2.text_input("팩스번호", value=d.get('팩스번호', '')); addr = c2.text_input("주소", value=d.get('주소', ''))
+        n = c1.text_input("거래처명", value=d.get('거래처명', '')); biz = c1.text_input("사업자번호", value=d.get('사업자등록번호', '')); p1 = c1.text_input("연락처1", value=d.get('연락처1', ''))
+        p2 = c2.text_input("연락처2", value=d.get('연락처2', '')); fax = c2.text_input("팩스번호", value=d.get('팩스번호', '')); addr = c2.text_input("주소", value=d.get('주소', ''))
         rem = st.text_input("비고", value=d.get('비고', '')); sub = st.form_submit_button("저장")
     if sub:
         if action == "신규 등록": conn.update("거래처", pd.concat([df_v, pd.DataFrame([{"거래처명":n, "사업자등록번호":biz, "연락처1":p1, "연락처2":p2, "팩스번호":fax, "주소":addr, "비고":rem}])], ignore_index=True))
@@ -158,8 +160,5 @@ elif menu == "월마감 정산서":
         filtered = df[(df['매입일자_dt'].dt.strftime('%Y-%m') == sel_ym) & (df['거래처'] == sel_v)]
         st.dataframe(filtered, use_container_width=True)
         st.write(f"### 💰 합계 금액: {int(filtered['총액'].sum()):,} 원")
-        
-        # 인쇄 버튼 기능
         if st.button("🖨️ 양식 인쇄하기"):
             components.html("<script>window.print();</script>")
-    else: st.info("데이터가 없습니다.")
