@@ -69,10 +69,23 @@ if menu == "종합 대시보드":
             st.altair_chart(chart, use_container_width=True)
 
 elif menu == "단가 검색":
-    st.subheader("🔎 전체 품목 단가 이력")
+    st.subheader("🔎 품목 및 거래처별 단가 조회")
     df_h = load_data("단가이력")
     if not df_h.empty:
-        st.dataframe(df_h.sort_values('변경일자', ascending=False), use_container_width=True)
+        # 조회 필터
+        c1, c2 = st.columns(2)
+        target_item = c1.selectbox("품목명 선택", ["전체"] + df_h['품목명'].unique().tolist())
+        target_vendor = c2.selectbox("거래처 선택", ["전체"] + df_h['거래처'].unique().tolist())
+        
+        # 필터 적용
+        df_filtered = df_h.copy()
+        if target_item != "전체": df_filtered = df_filtered[df_filtered['품목명'] == target_item]
+        if target_vendor != "전체": df_filtered = df_filtered[df_filtered['거래처'] == target_vendor]
+        
+        # 요청하신 컬럼만 선택하여 출력
+        display_df = df_filtered[['품목명', '단가', '변경일자']]
+        display_df.columns = ['품목', '단가', '변동일'] # 사용자 요청 표기명 변경
+        st.dataframe(display_df.sort_values('변동일', ascending=False), use_container_width=True)
 
 elif menu == "매입 자료 입력":
     st.subheader("📝 원부자재 매입 내역 등록")
@@ -148,7 +161,6 @@ elif menu == "거래처별 내역":
         date_range = c2.date_input("조회 기간 선택", value=(date.today()-timedelta(days=30), date.today()))
         i = c3.selectbox("품목", ["전체"] + df['품목명'].unique().tolist())
         
-        # 필터링 로직
         if v != "전체": df = df[df['거래처'] == v]
         if i != "전체": df = df[df['품목명'] == i]
         if len(date_range) == 2:
