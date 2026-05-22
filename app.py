@@ -1,4 +1,4 @@
-import streamlit st
+import streamlit as st
 import pandas as pd
 from datetime import date
 import os
@@ -155,7 +155,7 @@ elif menu_choice == "매입 자료 입력":
     else: st.info("입력된 매입 데이터가 없습니다.")
 
 # ==========================================
-# 💡 3. 거래처 등록 ('비고' 항목 추가 버전)
+# 3. 거래처 등록
 # ==========================================
 elif menu_choice == "거래처 등록":
     st.title("🏢 신규 거래처 등록")
@@ -170,7 +170,6 @@ elif menu_choice == "거래처 등록":
             v_fax = st.text_input("팩스번호")
             v_addr = st.text_input("주소")
             
-        # 💡 비고란을 하단에 넓게 추가했습니다.
         v_remarks = st.text_input("비고 (특이사항 등)")
         submitted = st.form_submit_button("저장")
         
