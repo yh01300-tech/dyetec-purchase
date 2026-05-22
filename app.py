@@ -8,15 +8,19 @@ import altair as alt
 st.set_page_config(page_title="현대다이텍 시스템", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 2. 화면 및 인쇄 최적화 CSS
+# 2. 화면 및 인쇄 최적화 CSS (인쇄 시 폰트 크기 축소 및 여백 최소화)
 st.markdown("""
     <style>
     table { width: 100% !important; max-width: 100% !important; border-collapse: collapse !important; table-layout: auto !important; }
     th, td { border: 1px solid black !important; padding: 8px !important; text-align: center !important; }
+    
     @media print {
         [data-testid="stSidebar"], .stAppHeader, .stButton, .stForm, .stRadio, .stMetric, .stInfo { display: none !important; }
-        #printable-area { display: block !important; width: 100% !important; margin: 0 !important; padding: 20px !important; }
-        h2, h3 { color: black !important; }
+        #printable-area { display: block !important; width: 100% !important; margin: 0 !important; padding: 5px !important; }
+        h2 { font-size: 16px !important; margin: 10px 0 !important; }
+        h3 { font-size: 14px !important; margin: 10px 0 !important; }
+        table { font-size: 9pt !important; }
+        td, th { padding: 3px 5px !important; }
     }
     </style>
 """, unsafe_allow_html=True)
@@ -34,7 +38,7 @@ def load_data(ws):
 
 st.title("🏢 현대다이텍 시스템")
 
-# 4. 사이드바 메뉴 (7개 유지)
+# 4. 사이드바 메뉴
 if st.sidebar.button("🔄 시스템 새로고침"): st.cache_data.clear(); st.rerun()
 menu = st.sidebar.radio("메뉴 선택", (
     "종합 대시보드", "매입 자료 입력", "거래처 등록", 
@@ -113,16 +117,12 @@ elif menu == "품목 등록":
                 conn.update(worksheet="품목", data=pd.concat([df_i, pd.DataFrame([{"제품명":n, "주거래처":v, "단가":p}])], ignore_index=True))
                 st.rerun()
     elif mode == "정보 수정":
-        # 1. 품목 선택 (행 구분을 위해 필수)
         target = st.selectbox("수정할 품목 선택", df_i['제품명'].tolist())
         row = df_i[df_i['제품명']==target].iloc[0]
-        
-        # 2. 거래처와 단가만 입력받음
         with st.form("edit_item"):
             opts = df_v['거래처명'].tolist()
             v = st.selectbox("변경할 주 거래처", opts, index=opts.index(row['주거래처']) if row['주거래처'] in opts else 0)
             p = st.number_input("변경할 단가", value=int(row['단가']))
-            
             if st.form_submit_button("💾 수정 완료"):
                 idx = df_i.index[df_i['제품명'] == target][0]
                 df_i.at[idx, '주거래처'] = v
@@ -133,7 +133,6 @@ elif menu == "품목 등록":
         q = st.text_input("🔎 품명 검색")
         df_view = df_i[df_i['제품명'].str.contains(q)] if q else df_i
         st.dataframe(df_view, use_container_width=True)
-    
     st.markdown("---"); st.subheader("📋 전체 품목 내역"); st.dataframe(df_i, use_container_width=True)
 
 elif menu == "단가변동이력":
@@ -166,4 +165,4 @@ elif menu == "월마감 정산서":
         f = df[(df['매입일자'].dt.strftime('%Y-%m') == ym) & (df['거래처'] == v)]
         f_print = f[['거래처', '품목명', '수량', '단가', '총액', '비고']].copy()
         f_print.columns = ['거래처', '품목', '수량', '단가', '합계', '비고']
-        st.markdown(f"<div id='printable-area'><h2>[{v}] {ym}월 매입 정산서</h2>{f_print.to_html(index=False)}<h3>토탈금액: {int(f['총액'].sum()):,} 원</h3></div>", unsafe_allow_html=True)
+        st.markdown(f"<div id='printable-area'><h2>[{v}] {ym}월 매입 정산서</h2>{f_print.to_html(index=False)}<h3>TOTAL금액: {int(f['총액'].sum()):,} 원</h3></div>", unsafe_allow_html=True)
