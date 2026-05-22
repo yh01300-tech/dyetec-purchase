@@ -1,25 +1,21 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
-import altair as alt
 from streamlit_gsheets import GSheetsConnection
 
 # 1. 페이지 설정
 st.set_page_config(page_title="현대다이텍 시스템", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 2. 인쇄 최적화 CSS (데이터 표를 제외한 UI 요소만 선택적으로 숨김)
+# 2. 인쇄 최적화 CSS (데이터 표와 합계 외 모든 것을 숨김)
 st.markdown("""
     <style>
     @media print {
-        [data-testid="stSidebar"], header, footer, .stButton, .stForm, .stRadio, .stTextInput, .stSelectbox, .stDateInput, .stMetric, .stInfo { 
-            display: none !important; 
-        }
-        .main, .block-container { padding: 0 !important; margin: 0 !important; max-width: 100% !important; }
-        /* 표가 잘리지 않게 강제 설정 */
+        body * { visibility: hidden !important; }
+        #printable-area, #printable-area * { visibility: visible !important; }
+        #printable-area { position: absolute; left: 0; top: 0; width: 100%; }
         table { width: 100% !important; border-collapse: collapse !important; table-layout: fixed !important; }
-        td, th { word-wrap: break-word !important; }
-        #printable-area { display: block !important; }
+        th, td { border: 1px solid black !important; padding: 8px !important; word-wrap: break-word !important; }
     }
     </style>
 """, unsafe_allow_html=True)
@@ -40,7 +36,7 @@ menu = st.sidebar.radio("메뉴 선택", (
     "품목 등록", "단가변동이력", "거래처별 내역", "월마감 정산서"
 ))
 
-# 4. 각 메뉴 기능 구현
+# 4. 기능 구현
 if menu == "종합 대시보드":
     st.subheader("📊 월간 매입 종합 대시보드")
     df = load_data("매입자료")
@@ -56,13 +52,6 @@ if menu == "종합 대시보드":
         c1.metric("이번 달 총 매입액", f"{int(curr['총액'].sum()):,} 원", f"전월 대비 {int(delta):,} 원")
         c2.metric("이번 달 매입 건수", f"{len(curr)} 건")
         if not curr.empty: c3.metric("최다 매입 거래처", curr.groupby('거래처')['총액'].sum().idxmax())
-        
-        st.subheader("🏆 거래처별 매입 비중")
-        if not curr.empty:
-            chart = alt.Chart(curr.groupby('거래처')['총액'].sum().reset_index()).mark_bar().encode(
-                x=alt.X('거래처', axis=alt.Axis(labelAngle=0)), y='총액'
-            )
-            st.altair_chart(chart, use_container_width=True)
     else: st.info("매입 자료가 없습니다.")
 
 elif menu == "단가 검색":
@@ -71,7 +60,7 @@ elif menu == "단가 검색":
     if not df_h.empty:
         item = st.selectbox("품목 선택", df_h['품목명'].unique())
         hist = df_h[df_h['품목명'] == item].sort_values('변경일자', ascending=False)
-        st.write(f"현재 최신 단가: {int(hist.iloc[0]['단가']):,} 원 / 최종 변동일: {hist.iloc[0]['변경일자']}")
+        st.write(f"현재 최신 단가: {int(hist.iloc[0]['단가']):,} 원")
         st.dataframe(hist, use_container_width=True)
 
 elif menu == "매입 자료 입력":
@@ -158,8 +147,12 @@ elif menu == "월마감 정산서":
         sel_v = st.selectbox("거래처 선택", df['거래처'].unique().tolist())
         filtered = df[(df['매입일자_dt'].dt.strftime('%Y-%m') == sel_ym) & (df['거래처'] == sel_v)]
         
-        # 인쇄 영역 (printable-area) - 제목, 데이터, 합계만 포함
-        st.markdown(f"<div id='printable-area'><h2>[{sel_v}] {sel_ym}월 매입 정산서</h2>", unsafe_allow_html=True)
-        st.dataframe(filtered, use_container_width=True)
-        st.write(f"<h3>💰 합계 금액: {int(filtered['총액'].sum()):,} 원</h3></div>", unsafe_allow_html=True)
+        # 인쇄 영역 (HTML 테이블로 직접 변환하여 인쇄 잘림 방지)
+        html_table = filtered.to_html(index=False, classes='table')
+        
+        st.markdown(f"""<div id='printable-area'>
+            <h2>[{sel_v}] {sel_ym}월 매입 정산서</h2>
+            {html_table}
+            <h3>💰 합계 금액: {int(filtered['총액'].sum()):,} 원</h3>
+        </div>""", unsafe_allow_html=True)
     else: st.info("데이터가 없습니다.")
