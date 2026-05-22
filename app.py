@@ -34,7 +34,7 @@ def load_data(ws):
 
 st.title("🏢 현대다이텍 시스템")
 
-# 4. 사이드바 메뉴
+# 4. 사이드바 메뉴 (7개 유지)
 if st.sidebar.button("🔄 시스템 새로고침"): st.cache_data.clear(); st.rerun()
 menu = st.sidebar.radio("메뉴 선택", (
     "종합 대시보드", "매입 자료 입력", "거래처 등록", 
@@ -113,12 +113,16 @@ elif menu == "품목 등록":
                 conn.update(worksheet="품목", data=pd.concat([df_i, pd.DataFrame([{"제품명":n, "주거래처":v, "단가":p}])], ignore_index=True))
                 st.rerun()
     elif mode == "정보 수정":
+        # 1. 품목 선택 (행 구분을 위해 필수)
+        target = st.selectbox("수정할 품목 선택", df_i['제품명'].tolist())
+        row = df_i[df_i['제품명']==target].iloc[0]
+        
+        # 2. 거래처와 단가만 입력받음
         with st.form("edit_item"):
-            target = st.selectbox("수정할 품목 선택", df_i['제품명'].tolist())
-            row = df_i[df_i['제품명']==target].iloc[0]
-            st.text_input("품목명", value=target, disabled=True) # 품명 고정
-            opts = df_v['거래처명'].tolist(); v = st.selectbox("변경할 주 거래처", opts, index=opts.index(row['주거래처']) if row['주거래처'] in opts else 0)
+            opts = df_v['거래처명'].tolist()
+            v = st.selectbox("변경할 주 거래처", opts, index=opts.index(row['주거래처']) if row['주거래처'] in opts else 0)
             p = st.number_input("변경할 단가", value=int(row['단가']))
+            
             if st.form_submit_button("💾 수정 완료"):
                 idx = df_i.index[df_i['제품명'] == target][0]
                 df_i.at[idx, '주거래처'] = v
@@ -127,7 +131,8 @@ elif menu == "품목 등록":
                 st.rerun()
     elif mode == "조회":
         q = st.text_input("🔎 품명 검색")
-        if q: df_i = df_i[df_i['제품명'].str.contains(q)]
+        df_view = df_i[df_i['제품명'].str.contains(q)] if q else df_i
+        st.dataframe(df_view, use_container_width=True)
     
     st.markdown("---"); st.subheader("📋 전체 품목 내역"); st.dataframe(df_i, use_container_width=True)
 
@@ -161,4 +166,4 @@ elif menu == "월마감 정산서":
         f = df[(df['매입일자'].dt.strftime('%Y-%m') == ym) & (df['거래처'] == v)]
         f_print = f[['거래처', '품목명', '수량', '단가', '총액', '비고']].copy()
         f_print.columns = ['거래처', '품목', '수량', '단가', '합계', '비고']
-        st.markdown(f"<div id='printable-area'><h2>[{v}] {ym}월 매입 정산서</h2>{f_print.to_html(index=False)}<h3>TOTAL금액: {int(f['총액'].sum()):,} 원</h3></div>", unsafe_allow_html=True)
+        st.markdown(f"<div id='printable-area'><h2>[{v}] {ym}월 매입 정산서</h2>{f_print.to_html(index=False)}<h3>토탈금액: {int(f['총액'].sum()):,} 원</h3></div>", unsafe_allow_html=True)
