@@ -8,26 +8,28 @@ from streamlit_gsheets import GSheetsConnection
 st.set_page_config(page_title="현대다이텍 시스템", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 2. 인쇄 최적화 CSS (데이터 정산서 외 모든 화면 요소 완벽 차단)
+# 2. 인쇄 최적화 CSS (데이터 표와 합계 외 모든 UI 완벽 차단)
 st.markdown("""
     <style>
     @media print {
-        body * { visibility: hidden !important; }
-        #printable-area, #printable-area * { visibility: visible !important; }
-        #printable-area { position: absolute; left: 0; top: 0; width: 100%; }
-        table { width: 100% !important; border-collapse: collapse !important; }
-        th, td { border: 1px solid black !important; padding: 8px !important; text-align: center; }
+        [data-testid="stSidebar"], .stAppHeader, .stButton, .stForm, .stRadio, .stMetric, .stInfo { 
+            display: none !important; 
+        }
+        #printable-area { display: block !important; width: 100% !important; }
+        .main, .block-container { padding: 0 !important; margin: 0 !important; max-width: 100% !important; }
+        table { width: 100% !important; border-collapse: collapse !important; table-layout: fixed !important; }
+        th, td { border: 1px solid black !important; padding: 8px !important; word-wrap: break-word !important; }
+        h2, h3 { color: black !important; }
     }
     </style>
 """, unsafe_allow_html=True)
 
-# 3. 데이터 로드 및 줄바꿈/공백 정제 함수
+# 3. 데이터 로드 및 줄바꿈/공백 정제 함수 (모든 데이터 로드 시 적용)
 @st.cache_data(ttl=60)
 def load_data(ws):
     try: 
         df = conn.read(worksheet=ws)
         if not df.empty:
-            # 컬럼명에서 \n 및 공백을 제거하여 시스템 인식 오류 방지
             df.columns = df.columns.str.replace(r'\n', '', regex=True).str.strip()
             df = df.replace(r'\n', ' ', regex=True)
         return df
@@ -36,7 +38,7 @@ def load_data(ws):
 # 4. 공통 상단 제목
 st.title("🏢 현대다이텍 시스템")
 
-# 5. 사이드바 메뉴 (8개 전체 복구)
+# 5. 사이드바 메뉴 (8개 항목 전체 복구)
 if st.sidebar.button("🔄 시스템 새로고침"): st.cache_data.clear(); st.rerun()
 menu = st.sidebar.radio("메뉴 선택", (
     "종합 대시보드", "단가 검색", "매입 자료 입력", "거래처 등록", 
@@ -61,8 +63,9 @@ if menu == "종합 대시보드":
         if not curr.empty:
             top_v = curr.groupby('거래처')['총액'].sum().idxmax()
             c3.metric("최다 매입 거래처", top_v)
+        else: c3.metric("최다 매입 거래처", "-")
         
-        st.subheader("🏆 거래처별 매입 비중 (가로 배열)")
+        st.subheader("🏆 거래처별 매입 비중")
         if not curr.empty:
             chart = alt.Chart(curr.groupby('거래처')['총액'].sum().reset_index()).mark_bar().encode(
                 x=alt.X('거래처', axis=alt.Axis(labelAngle=0)), y='총액'
@@ -122,8 +125,12 @@ elif menu == "월마감 정산서":
         sel_v = st.selectbox("거래처 선택", df['거래처'].unique().tolist())
         filtered = df[(df['매입일자'].dt.strftime('%Y-%m') == sel_ym) & (df['거래처'] == sel_v)]
         
-        # 인쇄 영역 (printable-area): 이 영역만 출력
-        st.markdown(f"<div id='printable-area'><h2>[{sel_v}] {sel_ym}월 매입 정산서</h2>" + 
-                    filtered.to_html(index=False) + 
-                    f"<h3>💰 합계 금액: {int(filtered['총액'].sum()):,} 원</h3></div>", unsafe_allow_html=True)
+        # 인쇄 영역 (HTML 테이블 변환 적용)
+        html_table = filtered.to_html(index=False, classes='table')
+        st.markdown(f"""<div id='printable-area'>
+            <h2>[{sel_v}] {sel_ym}월 매입 정산서</h2>
+            {html_table}
+            <h3>💰 합계 금액: {int(filtered['총액'].sum()):,} 원</h3>
+        </div>""", unsafe_allow_html=True)
+        st.info("💡 'Ctrl + P'를 누르면 위 정산서 양식만 출력됩니다.")
     else: st.info("데이터가 없습니다.")
