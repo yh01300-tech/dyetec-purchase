@@ -34,7 +34,7 @@ def load_data(ws):
 
 st.title("🏢 현대다이텍 시스템")
 
-# 4. 사이드바 메뉴 (7개 메뉴 유지)
+# 4. 사이드바 메뉴
 if st.sidebar.button("🔄 시스템 새로고침"): st.cache_data.clear(); st.rerun()
 menu = st.sidebar.radio("메뉴 선택", (
     "종합 대시보드", "매입 자료 입력", "거래처 등록", 
@@ -72,7 +72,7 @@ elif menu == "매입 자료 입력":
         rem = st.text_input("비고")
         if st.form_submit_button("✅ 내역 등록"):
             df = load_data("매입자료")
-            conn.update("매입자료", pd.concat([df, pd.DataFrame([{"매입일자":str(d), "거래처":v, "품목명":i, "수량":q, "총액":q*p, "비고":rem}])], ignore_index=True))
+            conn.update(worksheet="매입자료", data=pd.concat([df, pd.DataFrame([{"매입일자":str(d), "거래처":v, "품목명":i, "수량":q, "총액":q*p, "비고":rem}])], ignore_index=True))
             st.rerun()
     st.dataframe(load_data("매입자료").tail(10), use_container_width=True)
 
@@ -91,11 +91,11 @@ elif menu == "거래처 등록":
         fax = c2.text_input("팩스번호", value=row.get('팩스번호',''))
         rem = c2.text_input("비고", value=row.get('비고',''))
         if st.form_submit_button("💾 저장"):
-            if mode=="신규 등록": conn.update("거래처", pd.concat([df_v, pd.DataFrame([{"거래처명":n, "사업자등록번호":b, "연락처1":p1, "연락처2":p2, "팩스번호":fax, "비고":rem}])], ignore_index=True))
+            if mode=="신규 등록": conn.update(worksheet="거래처", data=pd.concat([df_v, pd.DataFrame([{"거래처명":n, "사업자등록번호":b, "연락처1":p1, "연락처2":p2, "팩스번호":fax, "비고":rem}])], ignore_index=True))
             else: 
                 idx = df_v[df_v['거래처명']==target].index[0]
                 df_v.at[idx, '거래처명'] = n; df_v.at[idx, '사업자등록번호'] = b; df_v.at[idx, '연락처1'] = p1; df_v.at[idx, '연락처2'] = p2; df_v.at[idx, '팩스번호'] = fax; df_v.at[idx, '비고'] = rem
-                conn.update("거래처", df_v)
+                conn.update(worksheet="거래처", data=df_v)
             st.rerun()
     st.dataframe(df_v, use_container_width=True)
 
@@ -104,26 +104,27 @@ elif menu == "품목 등록":
     mode = st.radio("작업", ["신규 등록", "정보 수정", "조회"], horizontal=True)
     df_i, df_v = load_data("품목"), load_data("거래처")
     
-    if mode in ["신규 등록", "정보 수정"]:
-        with st.form("item_form", clear_on_submit=True):
-            if mode == "정보 수정":
-                target = st.selectbox("수정할 품목 선택", df_i['제품명'].tolist())
-                row = df_i[df_i['제품명']==target].iloc[0]
-                st.text_input("품목명 (수정 불가)", value=target, disabled=True)
-                opts = df_v['거래처명'].tolist(); v = st.selectbox("주 거래처", opts, index=opts.index(row.get('주거래처')) if row.get('주거래처') in opts else 0)
-                p = st.number_input("단가", value=int(row.get('단가', 0)))
-                if st.form_submit_button("💾 수정 저장"):
-                    idx = df_i[df_i['제품명']==target].index[0]
-                    df_i.at[idx, '주거래처'] = v; df_i.at[idx, '단가'] = p
-                    conn.update("품목", df_i)
-                    st.rerun()
-            else:
-                n = st.text_input("품목명")
-                v = st.selectbox("주 거래처", df_v['거래처명'].tolist())
-                p = st.number_input("단가", 0)
-                if st.form_submit_button("💾 신규 저장"):
-                    conn.update("품목", pd.concat([df_i, pd.DataFrame([{"제품명":n, "주거래처":v, "단가":p}])], ignore_index=True))
-                    st.rerun()
+    if mode == "신규 등록":
+        with st.form("new_item", clear_on_submit=True):
+            n = st.text_input("품목명")
+            v = st.selectbox("주 거래처", df_v['거래처명'].tolist())
+            p = st.number_input("단가", 0)
+            if st.form_submit_button("💾 신규 등록"):
+                conn.update(worksheet="품목", data=pd.concat([df_i, pd.DataFrame([{"제품명":n, "주거래처":v, "단가":p}])], ignore_index=True))
+                st.rerun()
+    elif mode == "정보 수정":
+        with st.form("edit_item"):
+            target = st.selectbox("수정할 품목 선택", df_i['제품명'].tolist())
+            row = df_i[df_i['제품명']==target].iloc[0]
+            st.text_input("품목명", value=target, disabled=True) # 품명 고정
+            opts = df_v['거래처명'].tolist(); v = st.selectbox("변경할 주 거래처", opts, index=opts.index(row['주거래처']) if row['주거래처'] in opts else 0)
+            p = st.number_input("변경할 단가", value=int(row['단가']))
+            if st.form_submit_button("💾 수정 완료"):
+                idx = df_i.index[df_i['제품명'] == target][0]
+                df_i.at[idx, '주거래처'] = v
+                df_i.at[idx, '단가'] = p
+                conn.update(worksheet="품목", data=df_i)
+                st.rerun()
     elif mode == "조회":
         q = st.text_input("🔎 품명 검색")
         if q: df_i = df_i[df_i['제품명'].str.contains(q)]
@@ -160,4 +161,4 @@ elif menu == "월마감 정산서":
         f = df[(df['매입일자'].dt.strftime('%Y-%m') == ym) & (df['거래처'] == v)]
         f_print = f[['거래처', '품목명', '수량', '단가', '총액', '비고']].copy()
         f_print.columns = ['거래처', '품목', '수량', '단가', '합계', '비고']
-        st.markdown(f"<div id='printable-area'><h2>[{v}] {ym}월 매입 정산서</h2>{f_print.to_html(index=False)}<h3>토탈금액: {int(f['총액'].sum()):,} 원</h3></div>", unsafe_allow_html=True)
+        st.markdown(f"<div id='printable-area'><h2>[{v}] {ym}월 매입 정산서</h2>{f_print.to_html(index=False)}<h3>TOTAL금액: {int(f['총액'].sum()):,} 원</h3></div>", unsafe_allow_html=True)
