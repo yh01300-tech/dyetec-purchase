@@ -8,11 +8,13 @@ from streamlit_gsheets import GSheetsConnection
 st.set_page_config(page_title="현대다이텍 시스템", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 2. 인쇄 최적화 CSS (화면 UI를 강제로 숨기고 데이터만 출력)
+# 2. 인쇄 최적화 CSS (데이터 정산서 외 모든 화면 요소 숨김)
 st.markdown("""
     <style>
     @media print {
-        body * { visibility: hidden !important; }
+        /* 사이드바, 헤더, 버튼 등 모든 UI 숨김 */
+        [data-testid="stSidebar"], .stAppHeader, .stButton, .stForm, .stRadio, .stMetric { visibility: hidden !important; display: none !important; }
+        /* 인쇄 영역만 강제 표시 */
         #printable-area, #printable-area * { visibility: visible !important; }
         #printable-area { position: absolute; left: 0; top: 0; width: 100%; }
         table { width: 100% !important; border-collapse: collapse !important; }
@@ -21,7 +23,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 3. 데이터 로드 및 줄바꿈/공백 정제 함수 (데이터 누락/그래프 오류 방지)
+# 3. 데이터 로드 및 정제 함수
 @st.cache_data(ttl=60)
 def load_data(ws):
     try: 
@@ -32,16 +34,17 @@ def load_data(ws):
         return df
     except: return pd.DataFrame()
 
-# 4. 앱 제목 및 사이드바 메뉴 (8개 전체 복구)
+# 4. 공통 상단 제목
 st.title("🏢 현대다이텍 시스템")
-if st.sidebar.button("🔄 시스템 새로고침"): st.cache_data.clear(); st.rerun()
 
+# 5. 사이드바 메뉴 (8개 전체 복구)
+if st.sidebar.button("🔄 시스템 새로고침"): st.cache_data.clear(); st.rerun()
 menu = st.sidebar.radio("메뉴 선택", (
     "종합 대시보드", "단가 검색", "매입 자료 입력", "거래처 등록", 
     "품목 등록", "단가변동이력", "거래처별 내역", "월마감 정산서"
 ))
 
-# 5. 각 메뉴별 기능 구현
+# 6. 각 메뉴별 기능 구현
 if menu == "종합 대시보드":
     st.subheader("📊 월간 매입 종합 대시보드")
     df = load_data("매입자료")
@@ -52,10 +55,15 @@ if menu == "종합 대시보드":
         prev_m = 12 if t.month == 1 else t.month - 1
         prev = df[df['매입일자'].dt.month == prev_m]
         
-        c1, c2 = st.columns(2)
+        c1, c2, c3 = st.columns(3)
         delta = curr['총액'].sum() - prev['총액'].sum()
         c1.metric("이번 달 총 매입액", f"{int(curr['총액'].sum()):,} 원", f"전월 대비 {int(delta):,} 원")
         c2.metric("이번 달 매입 건수", f"{len(curr)} 건")
+        # 최다 매입 거래처 추가
+        if not curr.empty:
+            top_v = curr.groupby('거래처')['총액'].sum().idxmax()
+            c3.metric("최다 매입 거래처", top_v)
+        else: c3.metric("최다 매입 거래처", "-")
         
         st.subheader("🏆 거래처별 매입 비중 (가로 배열)")
         if not curr.empty:
@@ -109,7 +117,7 @@ elif menu == "거래처별 내역":
     st.dataframe(df, use_container_width=True)
 
 elif menu == "월마감 정산서":
-    st.title("🖨️ 월마감 정산서")
+    st.subheader("🖨️ 월마감 정산서")
     df = load_data("매입자료")
     if not df.empty and '매입일자' in df.columns:
         df['매입일자'] = pd.to_datetime(df['매입일자'], errors='coerce')
@@ -117,9 +125,9 @@ elif menu == "월마감 정산서":
         sel_v = st.selectbox("거래처 선택", df['거래처'].unique().tolist())
         filtered = df[(df['매입일자'].dt.strftime('%Y-%m') == sel_ym) & (df['거래처'] == sel_v)]
         
-        # 인쇄 영역 (printable-area)
+        # 인쇄 영역 (printable-area): 이 영역만 인쇄됨
         st.markdown(f"<div id='printable-area'><h2>[{sel_v}] {sel_ym}월 매입 정산서</h2>", unsafe_allow_html=True)
         st.dataframe(filtered, use_container_width=True)
         st.markdown(f"<h3>💰 합계 금액: {int(filtered['총액'].sum()):,} 원</h3></div>", unsafe_allow_html=True)
-        st.info("💡 인쇄(Ctrl+P) 시 UI는 사라지고 표만 출력됩니다.")
+        st.info("💡 'Ctrl + P'를 누르면 위 정산서만 깔끔하게 출력됩니다.")
     else: st.info("데이터가 없습니다.")
