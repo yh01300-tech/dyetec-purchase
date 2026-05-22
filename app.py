@@ -42,7 +42,7 @@ menu = st.sidebar.radio("메뉴 선택", (
     "품목 등록", "단가변동이력", "거래처별 내역", "월마감 정산서"
 ))
 
-# 6. 각 메뉴별 상세 구현
+# 6. 각 메뉴 기능 구현
 if menu == "종합 대시보드":
     st.subheader("📊 월간 매입 종합 대시보드")
     df = load_data("매입자료")
@@ -73,16 +73,13 @@ elif menu == "단가 검색":
     df_h = load_data("단가이력")
     if not df_h.empty:
         c1, c2 = st.columns(2)
-        # 필터링
         items = ["전체"] + df_h['품목명'].unique().tolist()
         vendors = ["전체"] + df_h['거래처'].unique().tolist()
         sel_i = c1.selectbox("품목명 선택", items)
         sel_v = c2.selectbox("거래처 선택", vendors)
-        
         df_f = df_h.copy()
         if sel_i != "전체": df_f = df_f[df_f['품목명'] == sel_i]
         if sel_v != "전체": df_f = df_f[df_f['거래처'] == sel_v]
-        
         res = df_f[['품목명', '단가', '변경일자']].copy()
         res.columns = ['품목', '단가', '변동일']
         st.dataframe(res.sort_values('변동일', ascending=False), use_container_width=True)
@@ -101,7 +98,7 @@ elif menu == "매입 자료 입력":
         sub = st.form_submit_button("✅ 내역 등록")
     if sub:
         df = load_data("매입자료")
-        conn.update("매입자료", pd.concat([df, pd.DataFrame([{"매입일자":str(d), "거래처":v, "품목명":i, "수량":q, "총액":q*p, "비고":rem}])], ignore_index=True))
+        conn.update(worksheet="매입자료", data=pd.concat([df, pd.DataFrame([{"매입일자":str(d), "거래처":v, "품목명":i, "수량":q, "총액":q*p, "비고":rem}])], ignore_index=True))
         st.rerun()
     st.dataframe(load_data("매입자료").tail(10), use_container_width=True)
 
@@ -120,16 +117,11 @@ elif menu == "거래처 등록":
         fax = c2.text_input("팩스번호", value=row.get('팩스번호',''))
         rem = c2.text_input("비고", value=row.get('비고',''))
         if st.form_submit_button("💾 저장"):
-            if mode=="신규 등록": conn.update("거래처", pd.concat([df_v, pd.DataFrame([{"거래처명":n, "사업자등록번호":b, "연락처1":p1, "연락처2":p2, "팩스번호":fax, "비고":rem}])], ignore_index=True))
+            if mode=="신규 등록": conn.update(worksheet="거래처", data=pd.concat([df_v, pd.DataFrame([{"거래처명":n, "사업자등록번호":b, "연락처1":p1, "연락처2":p2, "팩스번호":fax, "비고":rem}])], ignore_index=True))
             else: 
                 idx = df_v[df_v['거래처명']==target].index[0]
-                df_v.at[idx, '거래처명'] = n
-                df_v.at[idx, '사업자등록번호'] = b
-                df_v.at[idx, '연락처1'] = p1
-                df_v.at[idx, '연락처2'] = p2
-                df_v.at[idx, '팩스번호'] = fax
-                df_v.at[idx, '비고'] = rem
-                conn.update("거래처", df_v)
+                df_v.at[idx, '거래처명'] = n; df_v.at[idx, '사업자등록번호'] = b; df_v.at[idx, '연락처1'] = p1; df_v.at[idx, '연락처2'] = p2; df_v.at[idx, '팩스번호'] = fax; df_v.at[idx, '비고'] = rem
+                conn.update(worksheet="거래처", data=df_v)
             st.rerun()
     st.dataframe(df_v, use_container_width=True)
 
@@ -141,22 +133,14 @@ elif menu == "품목 등록":
         target = st.selectbox("품목 선택", df_i['제품명'].tolist()) if mode=="정보 수정" else None
         row = df_i[df_i['제품명']==target].iloc[0] if target else {}
         n = st.text_input("품목명", value=row.get('제품명',''))
-        
-        # 거래처 인덱스 안전 처리
-        opts = df_v['거래처명'].tolist()
-        val = row.get('주거래처')
-        idx = opts.index(val) if val in opts else 0
-        v = st.selectbox("주 거래처", opts, index=idx)
+        opts = df_v['거래처명'].tolist(); v = st.selectbox("주 거래처", opts, index=opts.index(row.get('주거래처')) if row.get('주거래처') in opts else 0)
         p = st.number_input("단가", value=int(row.get('단가', 0)))
-        
         if st.form_submit_button("💾 저장"):
-            if mode=="신규 등록": conn.update("품목", pd.concat([df_i, pd.DataFrame([{"제품명":n, "주거래처":v, "단가":p}])], ignore_index=True))
+            if mode=="신규 등록": conn.update(worksheet="품목", data=pd.concat([df_i, pd.DataFrame([{"제품명":n, "주거래처":v, "단가":p}])], ignore_index=True))
             else:
                 idx = df_i[df_i['제품명']==target].index[0]
-                df_i.at[idx, '제품명'] = n
-                df_i.at[idx, '주거래처'] = v
-                df_i.at[idx, '단가'] = p
-                conn.update("품목", df_i)
+                df_i.at[idx, '제품명'] = n; df_i.at[idx, '주거래처'] = v; df_i.at[idx, '단가'] = p
+                conn.update(worksheet="품목", data=df_i)
             st.rerun()
     st.dataframe(df_i, use_container_width=True)
 
@@ -165,7 +149,7 @@ elif menu == "단가변동이력":
     st.dataframe(load_data("단가이력"), use_container_width=True)
 
 elif menu == "거래처별 내역":
-    st.subheader("🔍 기간/거래처/품목별 상세 조회")
+    st.subheader("🔍 상세 내역 조회")
     df = load_data("매입자료")
     if not df.empty:
         df['매입일자'] = pd.to_datetime(df['매입일자'], errors='coerce')
@@ -173,19 +157,17 @@ elif menu == "거래처별 내역":
         v = c1.selectbox("거래처", ["전체"] + df['거래처'].unique().tolist())
         date_range = c2.date_input("조회 기간 선택", value=(date.today()-timedelta(days=30), date.today()))
         i = c3.selectbox("품목", ["전체"] + df['품목명'].unique().tolist())
-        
         if v != "전체": df = df[df['거래처'] == v]
         if i != "전체": df = df[df['품목명'] == i]
         if len(date_range) == 2:
             start_d, end_d = date_range
             df = df[(df['매입일자'].dt.date >= start_d) & (df['매입일자'].dt.date <= end_d)]
-        
         st.dataframe(df.sort_values('매입일자', ascending=False), use_container_width=True)
 
 elif menu == "월마감 정산서":
     st.title("🖨️ 월마감 정산서")
     df = load_data("매입자료")
-    if not df.empty and '매입일자' in df.columns:
+    if not df.empty:
         df['매입일자'] = pd.to_datetime(df['매입일자'], errors='coerce')
         ym = st.selectbox("월", sorted(df['매입일자'].dt.strftime('%Y-%m').unique().tolist(), reverse=True))
         v = st.selectbox("거래처", df['거래처'].unique().tolist())
