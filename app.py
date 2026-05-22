@@ -4,11 +4,10 @@ from datetime import date, timedelta
 from streamlit_gsheets import GSheetsConnection
 import altair as alt
 
-# 1. 페이지 및 연결 설정
-st.set_page_config(page_title="현대다이텍 시스템", layout="wide")
+# 1. 페이지 설정 및 CSS
+st.set_page_config(page_title="현대다이텍 통합 시스템", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 2. CSS (인쇄 및 UI 최적화)
 st.markdown("""
     <style>
     table { width: 100% !important; border-collapse: collapse !important; }
@@ -22,19 +21,23 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 3. 공통 함수 및 세션 관리
+# 2. 데이터 관리
 def load_data(ws): 
     try: return conn.read(worksheet=ws, ttl=5)
     except: return pd.DataFrame()
 
-if 'price_input' not in st.session_state: st.session_state.price_input = 0
-
+# 단가 안전 업데이트
 def on_item_change():
-    item = st.session_state.item_select
+    item = st.session_state.get('item_select')
     df_i = load_data("품목")
-    if not df_i.empty and '제품명' in df_i.columns and item in df_i['제품명'].values:
+    if not df_i.empty and '제품명' in df_i.columns:
         match = df_i[df_i['제품명'] == item]
-        st.session_state.price_input = int(float(str(match.iloc[0]['단가']).replace(',', '').replace('원', '').strip()))
+        if not match.empty:
+            raw = str(match.iloc[0]['단가']).replace(',', '').replace('원', '').strip()
+            try: st.session_state.price_input = int(float(raw))
+            except: st.session_state.price_input = 0
+        else: st.session_state.price_input = 0
+    else: st.session_state.price_input = 0
 
 st.title("🏢 현대다이텍 통합 관리 시스템")
 
@@ -43,7 +46,7 @@ menu = st.sidebar.radio("메뉴 선택", (
     "품목 등록", "단가변동이력", "거래처별 내역", "월마감 정산서"
 ))
 
-# 4. 기능 구현부
+# 3. 메뉴 구현
 if menu == "종합 대시보드":
     st.subheader("📊 월간 매입 종합 대시보드")
     df = load_data("매입자료")
@@ -57,13 +60,15 @@ if menu == "종합 대시보드":
         c2.metric("이번 달 매입 건수", f"{len(curr)} 건")
         if not curr.empty: c3.metric("최다 매입 거래처", curr.groupby('거래처')['총액'].sum().idxmax())
         st.subheader("🏆 거래처별 매입 비중")
-        st.altair_chart(alt.Chart(curr.groupby('거래처')['총액'].sum().reset_index()).mark_bar().encode(
-            x=alt.X('거래처', axis=alt.Axis(labelAngle=0)), y='총액'
-        ), use_container_width=True)
+        if not curr.empty:
+            st.altair_chart(alt.Chart(curr.groupby('거래처')['총액'].sum().reset_index()).mark_bar().encode(
+                x=alt.X('거래처', axis=alt.Axis(labelAngle=0)), y='총액'
+            ), use_container_width=True)
 
 elif menu == "매입 자료 입력":
     st.subheader("📝 원부자재 매입 내역 등록")
     df_v, df_i = load_data("거래처"), load_data("품목")
+    if 'price_input' not in st.session_state: st.session_state.price_input = 0
     c1, c2 = st.columns(2)
     d = c1.date_input("매입 일자")
     v = c1.selectbox("거래처", df_v['거래처명'].tolist() if not df_v.empty else [])
@@ -77,13 +82,8 @@ elif menu == "매입 자료 입력":
         conn.update(worksheet="매입자료", data=pd.concat([df, new_row], ignore_index=True))
         st.success("등록 완료")
         st.rerun()
-    
-    st.markdown("---")
     st.subheader("📋 전체 매입 내역")
-    df_display = load_data("매입자료")
-    if not df_display.empty:
-        df_display['매입일자'] = pd.to_datetime(df_display['매입일자'], errors='coerce')
-        st.dataframe(df_display.sort_values('매입일자', ascending=False), use_container_width=True)
+    st.dataframe(load_data("매입자료").sort_values('매입일자', ascending=False), use_container_width=True)
 
 elif menu == "거래처 등록":
     st.subheader("🏢 거래처 등록 및 정보 수정")
@@ -139,7 +139,6 @@ elif menu == "품목 등록":
     st.dataframe(df_i)
 
 elif menu == "단가변동이력": st.dataframe(load_data("단가이력"))
-
 elif menu == "거래처별 내역":
     st.subheader("🔍 기간/거래처별 상세 조회")
     df = load_data("매입자료")
