@@ -8,7 +8,7 @@ import altair as alt
 st.set_page_config(page_title="현대다이텍 시스템", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 2. 화면 및 인쇄 최적화 CSS (인쇄 시 폰트 크기 축소 및 여백 최소화)
+# 2. 인쇄 최적화 CSS (제목 제거 및 폰트 축소)
 st.markdown("""
     <style>
     table { width: 100% !important; max-width: 100% !important; border-collapse: collapse !important; table-layout: auto !important; }
@@ -16,8 +16,8 @@ st.markdown("""
     
     @media print {
         [data-testid="stSidebar"], .stAppHeader, .stButton, .stForm, .stRadio, .stMetric, .stInfo { display: none !important; }
+        h1 { display: none !important; } /* 메인 제목 숨김 */
         #printable-area { display: block !important; width: 100% !important; margin: 0 !important; padding: 5px !important; }
-        h2 { font-size: 16px !important; margin: 10px 0 !important; }
         h3 { font-size: 14px !important; margin: 10px 0 !important; }
         table { font-size: 9pt !important; }
         td, th { padding: 3px 5px !important; }
@@ -107,32 +107,27 @@ elif menu == "품목 등록":
     st.subheader("📦 품목 등록 / 수정 및 단가 조회")
     mode = st.radio("작업", ["신규 등록", "정보 수정", "조회"], horizontal=True)
     df_i, df_v = load_data("품목"), load_data("거래처")
-    
-    if mode == "신규 등록":
-        with st.form("new_item", clear_on_submit=True):
-            n = st.text_input("품목명")
-            v = st.selectbox("주 거래처", df_v['거래처명'].tolist())
-            p = st.number_input("단가", 0)
-            if st.form_submit_button("💾 신규 등록"):
-                conn.update(worksheet="품목", data=pd.concat([df_i, pd.DataFrame([{"제품명":n, "주거래처":v, "단가":p}])], ignore_index=True))
-                st.rerun()
-    elif mode == "정보 수정":
-        target = st.selectbox("수정할 품목 선택", df_i['제품명'].tolist())
-        row = df_i[df_i['제품명']==target].iloc[0]
-        with st.form("edit_item"):
-            opts = df_v['거래처명'].tolist()
-            v = st.selectbox("변경할 주 거래처", opts, index=opts.index(row['주거래처']) if row['주거래처'] in opts else 0)
-            p = st.number_input("변경할 단가", value=int(row['단가']))
-            if st.form_submit_button("💾 수정 완료"):
-                idx = df_i.index[df_i['제품명'] == target][0]
-                df_i.at[idx, '주거래처'] = v
-                df_i.at[idx, '단가'] = p
-                conn.update(worksheet="품목", data=df_i)
-                st.rerun()
+    if mode in ["신규 등록", "정보 수정"]:
+        with st.form("item_form", clear_on_submit=True):
+            if mode == "정보 수정":
+                target = st.selectbox("수정할 품목 선택", df_i['제품명'].tolist())
+                row = df_i[df_i['제품명']==target].iloc[0]
+                st.text_input("품목명 (수정 불가)", value=target, disabled=True)
+                opts = df_v['거래처명'].tolist(); v = st.selectbox("변경할 주 거래처", opts, index=opts.index(row['주거래처']) if row['주거래처'] in opts else 0)
+                p = st.number_input("변경할 단가", value=int(row['단가']))
+                if st.form_submit_button("💾 수정 완료"):
+                    idx = df_i.index[df_i['제품명'] == target][0]
+                    df_i.at[idx, '주거래처'] = v; df_i.at[idx, '단가'] = p
+                    conn.update(worksheet="품목", data=df_i)
+                    st.rerun()
+            else:
+                n = st.text_input("품목명"); v = st.selectbox("주 거래처", df_v['거래처명'].tolist()); p = st.number_input("단가", 0)
+                if st.form_submit_button("💾 신규 등록"):
+                    conn.update(worksheet="품목", data=pd.concat([df_i, pd.DataFrame([{"제품명":n, "주거래처":v, "단가":p}])], ignore_index=True))
+                    st.rerun()
     elif mode == "조회":
         q = st.text_input("🔎 품명 검색")
-        df_view = df_i[df_i['제품명'].str.contains(q)] if q else df_i
-        st.dataframe(df_view, use_container_width=True)
+        if q: df_i = df_i[df_i['제품명'].str.contains(q)]
     st.markdown("---"); st.subheader("📋 전체 품목 내역"); st.dataframe(df_i, use_container_width=True)
 
 elif menu == "단가변동이력":
@@ -165,4 +160,4 @@ elif menu == "월마감 정산서":
         f = df[(df['매입일자'].dt.strftime('%Y-%m') == ym) & (df['거래처'] == v)]
         f_print = f[['거래처', '품목명', '수량', '단가', '총액', '비고']].copy()
         f_print.columns = ['거래처', '품목', '수량', '단가', '합계', '비고']
-        st.markdown(f"<div id='printable-area'><h2>[{v}] {ym}월 매입 정산서</h2>{f_print.to_html(index=False)}<h3>TOTAL금액: {int(f['총액'].sum()):,} 원</h3></div>", unsafe_allow_html=True)
+        st.markdown(f"<div id='printable-area'>{f_print.to_html(index=False)}<h3>토탈금액: {int(f['총액'].sum()):,} 원</h3></div>", unsafe_allow_html=True)
