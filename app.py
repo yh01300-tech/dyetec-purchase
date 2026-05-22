@@ -8,7 +8,7 @@ from streamlit_gsheets import GSheetsConnection
 st.set_page_config(page_title="현대다이텍 시스템", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 2. 인쇄 최적화 CSS
+# 2. 인쇄 최적화 CSS (데이터 정산서 외 UI 완벽 차단)
 st.markdown("""
     <style>
     @media print {
@@ -21,7 +21,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 3. 데이터 로드 및 정제
+# 3. 데이터 로드 및 정제 함수
 @st.cache_data(ttl=60)
 def load_data(ws):
     try: 
@@ -69,23 +69,10 @@ if menu == "종합 대시보드":
             st.altair_chart(chart, use_container_width=True)
 
 elif menu == "단가 검색":
-    st.subheader("🔎 품목 및 거래처별 단가 조회")
+    st.subheader("🔎 전체 품목 단가 이력")
     df_h = load_data("단가이력")
     if not df_h.empty:
-        # 조회 필터
-        c1, c2 = st.columns(2)
-        target_item = c1.selectbox("품목명 선택", ["전체"] + df_h['품목명'].unique().tolist())
-        target_vendor = c2.selectbox("거래처 선택", ["전체"] + df_h['거래처'].unique().tolist())
-        
-        # 필터 적용
-        df_filtered = df_h.copy()
-        if target_item != "전체": df_filtered = df_filtered[df_filtered['품목명'] == target_item]
-        if target_vendor != "전체": df_filtered = df_filtered[df_filtered['거래처'] == target_vendor]
-        
-        # 요청하신 컬럼만 선택하여 출력
-        display_df = df_filtered[['품목명', '단가', '변경일자']]
-        display_df.columns = ['품목', '단가', '변동일'] # 사용자 요청 표기명 변경
-        st.dataframe(display_df.sort_values('변동일', ascending=False), use_container_width=True)
+        st.dataframe(df_h.sort_values('변경일자', ascending=False), use_container_width=True)
 
 elif menu == "매입 자료 입력":
     st.subheader("📝 원부자재 매입 내역 등록")
@@ -136,7 +123,13 @@ elif menu == "품목 등록":
         target = st.selectbox("품목 선택", df_i['제품명'].tolist()) if mode=="정보 수정" else None
         row = df_i[df_i['제품명']==target].iloc[0] if target else {}
         n = st.text_input("품목명", value=row.get('제품명',''))
-        v = st.selectbox("주 거래처", df_v['거래처명'].tolist(), index=df_v['거래처명'].tolist().index(row.get('주거래처')) if target else 0)
+        
+        # 주 거래처 선택 오류 수정: 안전하게 인덱스 할당
+        options = df_v['거래처명'].tolist()
+        current_vendor = row.get('주거래처')
+        idx = options.index(current_vendor) if current_vendor in options else 0
+        v = st.selectbox("주 거래처", options, index=idx)
+        
         p = st.number_input("단가", value=int(row.get('단가', 0)))
         if st.form_submit_button("💾 저장"):
             if mode=="신규 등록": conn.update("품목", pd.concat([df_i, pd.DataFrame([{"제품명":n, "주거래처":v, "단가":p}])], ignore_index=True))
