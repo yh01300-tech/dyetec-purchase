@@ -4,21 +4,17 @@ from datetime import date
 import altair as alt
 from streamlit_gsheets import GSheetsConnection
 
-# 1. 시스템 설정
+# 1. 페이지 설정
 st.set_page_config(page_title="현대다이텍 시스템", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 2. 강력한 인쇄 전용 CSS (정산서 데이터 외 100% 숨김)
+# 2. 인쇄 최적화 CSS (정산서 데이터 외 100% 숨김)
 st.markdown("""
     <style>
     @media print {
-        /* 인쇄 시 정산서 영역(printable-area)을 제외한 모든 UI 숨김 */
         body * { visibility: hidden !important; }
         #printable-area, #printable-area * { visibility: visible !important; }
         #printable-area { position: absolute; left: 0; top: 0; width: 100%; }
-        
-        /* 인쇄 페이지 여백 제거 및 데이터 폭 최적화 */
-        @page { margin: 0.5cm; }
         .stDataFrame { width: 100% !important; }
         table { width: 100% !important; border-collapse: collapse; }
     }
@@ -30,8 +26,8 @@ def load_data(ws):
     try: return conn.read(worksheet=ws)
     except: return pd.DataFrame()
 
-# 3. 사이드바 및 메뉴
-st.sidebar.title("🏢 현대다이텍 시스템")
+# 3. 제목 및 사이드바
+st.title("현대다이텍 시스템")
 if st.sidebar.button("🔄 시스템 새로고침"): st.cache_data.clear(); st.rerun()
 menu = st.sidebar.radio("메뉴 선택", (
     "종합 대시보드", "단가 검색", "매입 자료 입력", "거래처 등록", 
@@ -75,7 +71,12 @@ elif menu == "매입 자료 입력":
     st.subheader("📝 원부자재 매입 내역 등록")
     df_v = load_data("거래처"); df_i = load_data("품목")
     sel_i = st.selectbox("품목 선택 (단가 자동 호출)", df_i['제품명'].tolist() if not df_i.empty else [])
-    default_p = int(df_i[df_i['제품명'] == sel_i].iloc[0]['단가']) if not df_i.empty and sel_i and not df_i[df_i['제품명'] == sel_i].empty else 0
+    
+    default_p = 0
+    if not df_i.empty and sel_i:
+        row = df_i[df_i['제품명'] == sel_i]
+        if not row.empty: default_p = int(row.iloc[0]['단가'])
+        
     with st.form("buy_form", clear_on_submit=True):
         c1, c2 = st.columns(2)
         d = c1.date_input("매입 일자"); v = c1.selectbox("거래처", df_v['거래처명'].tolist() if not df_v.empty else [])
@@ -119,7 +120,7 @@ elif menu == "품목 등록":
         sel = st.selectbox("수정할 품목", df_i['제품명'].unique())
         d = df_i[df_i['제품명'] == sel].iloc[0].to_dict()
     with st.form("i_form", clear_on_submit=True):
-        n = st.input_text("제품명", value=d.get('제품명', ''))
+        n = st.text_input("제품명", value=d.get('제품명', ''))
         v = st.selectbox("거래처", df_v['거래처명'] if not df_v.empty else [], index=df_v['거래처명'].tolist().index(d['주거래처']) if d.get('주거래처') in df_v['거래처명'].tolist() else 0)
         p = st.number_input("단가", value=int(d.get('단가', 0))); sub = st.form_submit_button("저장")
     if sub:
@@ -147,7 +148,7 @@ elif menu == "거래처별 내역":
         st.dataframe(df, use_container_width=True)
 
 elif menu == "월마감 정산서":
-    st.title("🖨️ 월마감 정산서")
+    st.subheader("🖨️ 월마감 정산서")
     df = load_data("매입자료")
     if not df.empty and '매입일자' in df.columns:
         df['매입일자_dt'] = pd.to_datetime(df['매입일자'], errors='coerce')
@@ -155,7 +156,7 @@ elif menu == "월마감 정산서":
         sel_v = st.selectbox("거래처 선택", df['거래처'].unique().tolist())
         filtered = df[(df['매입일자_dt'].dt.strftime('%Y-%m') == sel_ym) & (df['거래처'] == sel_v)]
         
-        # 인쇄 영역 (printable-area ID 부여)
+        # 인쇄 영역에 ID 부여
         st.markdown(f"<div id='printable-area'><h2>[{sel_v}] {sel_ym}월 매입 정산서</h2>", unsafe_allow_html=True)
         st.dataframe(filtered, use_container_width=True)
         st.write(f"<h3>💰 합계 금액: {int(filtered['총액'].sum()):,} 원</h3></div>", unsafe_allow_html=True)
