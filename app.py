@@ -1,4 +1,4 @@
-import streamlit as st
+import streamlit st
 import pandas as pd
 from datetime import date
 import os
@@ -155,17 +155,39 @@ elif menu_choice == "매입 자료 입력":
     else: st.info("입력된 매입 데이터가 없습니다.")
 
 # ==========================================
-# 3. 거래처 등록
+# 💡 3. 거래처 등록 ('비고' 항목 추가 버전)
 # ==========================================
 elif menu_choice == "거래처 등록":
     st.title("🏢 신규 거래처 등록")
     with st.form("v_form", clear_on_submit=True):
-        v_name, v_biz = st.text_input("거래처명 *"), st.text_input("사업자번호")
+        c1, c2 = st.columns(2)
+        with c1:
+            v_name = st.text_input("거래처명 *")
+            v_biz = st.text_input("사업자번호")
+            v_phone1 = st.text_input("연락처1")
+        with c2:
+            v_phone2 = st.text_input("연락처2")
+            v_fax = st.text_input("팩스번호")
+            v_addr = st.text_input("주소")
+            
+        # 💡 비고란을 하단에 넓게 추가했습니다.
+        v_remarks = st.text_input("비고 (특이사항 등)")
         submitted = st.form_submit_button("저장")
+        
     if submitted and v_name:
         df = load_data("거래처")
-        conn.update(worksheet="거래처", data=pd.concat([df, pd.DataFrame([{"거래처명": v_name, "사업자등록번호": v_biz}])], ignore_index=True))
+        new_vendor = {
+            "거래처명": v_name, 
+            "사업자등록번호": v_biz, 
+            "연락처1": v_phone1, 
+            "연락처2": v_phone2, 
+            "팩스번호": v_fax, 
+            "주소": v_addr,
+            "비고": v_remarks
+        }
+        conn.update(worksheet="거래처", data=pd.concat([df, pd.DataFrame([new_vendor])], ignore_index=True))
         st.cache_data.clear(); st.rerun()
+        
     st.subheader("🏢 등록된 거래처 목록")
     df_v = load_data("거래처")
     if not df_v.empty: st.dataframe(df_v, use_container_width=True)
@@ -218,7 +240,7 @@ elif menu_choice == "단가변동이력":
     else: st.info("아직 변경된 단가 이력이 없습니다.")
 
 # ==========================================
-# 💡 6. 거래처별 내역 (품목 선택 기능이 추가된 버전)
+# 6. 거래처별 내역
 # ==========================================
 elif menu_choice == "거래처별 내역":
     st.title("🔍 거래처 및 품목별 매입 조회")
@@ -232,7 +254,6 @@ elif menu_choice == "거래처별 내역":
         df['매입일자_dt'] = pd.to_datetime(df['매입일자'], errors='coerce')
         valid_dates = df['매입일자_dt'].dropna()
         
-        # 💡 조회 상단을 3열 구조로 변경하여 품목 선택창을 넣었습니다.
         c1, c2, c3 = st.columns(3)
         with c1:
             if '거래처' in df.columns:
@@ -255,18 +276,13 @@ elif menu_choice == "거래처별 내역":
                 min_d, max_d = date.today(), date.today()
             sel_date = st.date_input("조회 기간 선택", value=(min_d, max_d))
         
-        # 필터링 로직 진행
         filtered_df = df.copy()
-        
-        # 1. 거래처 필터
         if sel_vendor != "전체" and '거래처' in filtered_df.columns:
             filtered_df = filtered_df[filtered_df['거래처'] == sel_vendor]
             
-        # 2. 품목 필터 추가
         if sel_item != "전체" and '품목명' in filtered_df.columns:
             filtered_df = filtered_df[filtered_df['품목명'] == sel_item]
             
-        # 3. 날짜 필터
         if len(sel_date) == 2:
             filtered_df = filtered_df[(filtered_df['매입일자_dt'].dt.date >= sel_date[0]) & (filtered_df['매입일자_dt'].dt.date <= sel_date[1])]
         elif len(sel_date) == 1:
