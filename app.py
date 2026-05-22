@@ -155,21 +155,18 @@ elif menu_choice == "매입 자료 입력":
     else: st.info("입력된 매입 데이터가 없습니다.")
 
 # ==========================================
-# 💡 3. 거래처 등록 및 수정 (신규 개선 기능)
+# 💡 3. 거래처 등록 및 수정 (타입 에러 완벽 해결)
 # ==========================================
 elif menu_choice == "거래처 등록":
     st.title("🏢 거래처 등록 및 정보 수정")
     df_v = load_data("거래처")
     
-    # 신규 등록 또는 기존 수정을 선택하는 라디오 버튼 추가
     action = st.radio("작업 선택", ("신규 등록", "기존 거래처 정보 수정"), horizontal=True)
     
-    # 입력 필드 기본값 초기화
     default_name, default_biz, default_phone1, default_phone2 = "", "", "", ""
     default_fax, default_addr, default_remarks = "", "", ""
     selected_vendor = None
     
-    # 수정 모드일 때 기존 데이터 불러오기 로직
     if action == "기존 거래처 정보 수정":
         if not df_v.empty and '거래처명' in df_v.columns:
             vendor_list = df_v['거래처명'].dropna().unique().tolist()
@@ -177,7 +174,6 @@ elif menu_choice == "거래처 등록":
                 selected_vendor = st.selectbox("수정할 거래처 선택", vendor_list)
                 v_data = df_v[df_v['거래처명'] == selected_vendor].iloc[0]
                 
-                # 빈 칸(NaN)이 'nan' 문자열로 채워지는 현상 방지 안전장치
                 def get_safe_val(col):
                     if col in v_data.index and pd.notna(v_data[col]):
                         return str(v_data[col])
@@ -193,7 +189,6 @@ elif menu_choice == "거래처 등록":
         else:
             st.info("수정할 거래처 데이터가 없습니다. 먼저 신규 등록을 진행해 주세요.")
             
-    # 통합 입력 폼
     with st.form("v_form", clear_on_submit=True):
         c1, c2 = st.columns(2)
         with c1:
@@ -227,12 +222,17 @@ elif menu_choice == "거래처 등록":
                 df = pd.concat([df, pd.DataFrame([new_vendor_data])], ignore_index=True)
                 conn.update(worksheet="거래처", data=df)
                 st.cache_data.clear(); st.rerun()
-        else: # 기존 거래처 정보 수정 모드
+        else: 
             if not df.empty and '거래처명' in df.columns and selected_vendor in df['거래처명'].values:
-                # 선택된 원래 거래처명의 행 인덱스를 찾아 덮어쓰기
                 idx = df[df['거래처명'] == selected_vendor].index[0]
+                
+                # 💡 핵심 해결 코드: 값을 덮어쓰기 전에 모든 대상 열을 'object(문자 허용)' 타입으로 변환합니다.
                 for key, val in new_vendor_data.items():
+                    if key not in df.columns:
+                        df[key] = "" 
+                    df[key] = df[key].astype(object) # 숫자형 칸이어도 문자를 받을 수 있게 강제 변환
                     df.at[idx, key] = val
+                    
                 conn.update(worksheet="거래처", data=df)
                 st.cache_data.clear(); st.rerun()
         
