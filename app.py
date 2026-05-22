@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import date
+from datetime import date, timedelta
 import altair as alt
 from streamlit_gsheets import GSheetsConnection
 
@@ -21,7 +21,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 3. 데이터 로드 및 줄바꿈/공백 정제
+# 3. 데이터 로드 및 정제
 @st.cache_data(ttl=60)
 def load_data(ws):
     try: 
@@ -69,11 +69,10 @@ if menu == "종합 대시보드":
             st.altair_chart(chart, use_container_width=True)
 
 elif menu == "단가 검색":
-    st.subheader("🔎 품목별 최신 단가 검색")
+    st.subheader("🔎 전체 품목 단가 이력")
     df_h = load_data("단가이력")
     if not df_h.empty:
-        item = st.selectbox("품목 선택", df_h['품목명'].unique())
-        st.dataframe(df_h[df_h['품목명'] == item].sort_values('변경일자', ascending=False), use_container_width=True)
+        st.dataframe(df_h.sort_values('변경일자', ascending=False), use_container_width=True)
 
 elif menu == "매입 자료 입력":
     st.subheader("📝 원부자재 매입 내역 등록")
@@ -140,16 +139,23 @@ elif menu == "단가변동이력":
     st.dataframe(load_data("단가이력"), use_container_width=True)
 
 elif menu == "거래처별 내역":
-    st.subheader("🔍 상세 내역 조회")
+    st.subheader("🔍 기간/거래처/품목별 상세 조회")
     df = load_data("매입자료")
-    c1, c2, c3 = st.columns(3)
-    v = c1.selectbox("거래처", ["전체"] + df['거래처'].unique().tolist())
-    d = c2.date_input("날짜", None)
-    i = c3.selectbox("품목", ["전체"] + df['품목명'].unique().tolist())
-    if v != "전체": df = df[df['거래처'] == v]
-    if i != "전체": df = df[df['품목명'] == i]
-    if d: df = df[pd.to_datetime(df['매입일자']).dt.date == d]
-    st.dataframe(df, use_container_width=True)
+    if not df.empty:
+        df['매입일자'] = pd.to_datetime(df['매입일자'], errors='coerce')
+        c1, c2, c3 = st.columns(3)
+        v = c1.selectbox("거래처", ["전체"] + df['거래처'].unique().tolist())
+        date_range = c2.date_input("조회 기간 선택", value=(date.today()-timedelta(days=30), date.today()))
+        i = c3.selectbox("품목", ["전체"] + df['품목명'].unique().tolist())
+        
+        # 필터링 로직
+        if v != "전체": df = df[df['거래처'] == v]
+        if i != "전체": df = df[df['품목명'] == i]
+        if len(date_range) == 2:
+            start_d, end_d = date_range
+            df = df[(df['매입일자'].dt.date >= start_d) & (df['매입일자'].dt.date <= end_d)]
+        
+        st.dataframe(df.sort_values('매입일자', ascending=False), use_container_width=True)
 
 elif menu == "월마감 정산서":
     st.title("🖨️ 월마감 정산서")
