@@ -50,9 +50,10 @@ if st.sidebar.button("🔄 시스템 새로고침 (오류 해결)"):
     st.cache_data.clear()
     st.rerun()
 
+# 💡 '단가 검색' 메뉴가 두 번째에 추가되었습니다.
 menu_choice = st.sidebar.radio(
     "메뉴 선택", 
-    ("종합 대시보드", "매입 자료 입력", "거래처 등록", "품목 등록", "단가변동이력", "거래처별 내역", "월마감 정산서")
+    ("종합 대시보드", "단가 검색", "매입 자료 입력", "거래처 등록", "품목 등록", "단가변동이력", "거래처별 내역", "월마감 정산서")
 )
 
 # ==========================================
@@ -118,7 +119,52 @@ if menu_choice == "종합 대시보드":
                 st.info("이번 달 등록된 매입 내역이 없어 그래프를 표시할 수 없습니다.")
 
 # ==========================================
-# 2. 매입 자료 입력
+# 💡 2. 단가 검색 (신규 기능)
+# ==========================================
+elif menu_choice == "단가 검색":
+    st.title("🔎 품목별 단가 검색")
+    df_h = load_data("단가이력")
+    
+    if df_h.empty or '품목명' not in df_h.columns:
+        st.info("💡 등록된 단가 이력이 없습니다. 품목을 먼저 등록해 주세요.")
+    else:
+        # 변경일자를 기준으로 정렬하기 위해 날짜 데이터로 변환
+        if '변경일자' in df_h.columns:
+            df_h['변경일자_dt'] = pd.to_datetime(df_h['변경일자'], errors='coerce')
+        else:
+            df_h['변경일자_dt'] = pd.NaT
+
+        item_list = df_h['품목명'].dropna().unique().tolist()
+        sel_item = st.selectbox("단가를 확인할 품목을 선택하세요", item_list)
+        
+        if sel_item:
+            # 선택한 품목의 이력만 필터링하고 최신순(내림차순)으로 정렬
+            item_history = df_h[df_h['품목명'] == sel_item].sort_values(by='변경일자_dt', ascending=False)
+            
+            if not item_history.empty:
+                # 가장 위에 있는 데이터가 최신 데이터
+                latest_info = item_history.iloc[0]
+                latest_price = latest_info['단가'] if '단가' in latest_info else 0
+                latest_date = latest_info['변경일자'] if '변경일자' in latest_info else "정보 없음"
+                vendor_name = latest_info['거래처'] if '거래처' in latest_info else "정보 없음"
+                
+                st.subheader(f"📌 [{sel_item}] 현재 적용 단가")
+                
+                # 핵심 정보를 눈에 띄게 배치
+                c1, c2, c3 = st.columns(3)
+                c1.metric("현재 단가", f"{int(latest_price):,} 원")
+                c2.metric("최종 변동일", str(latest_date))
+                c3.metric("주거래처", str(vendor_name))
+                
+                st.divider()
+                st.subheader("📜 과거 단가 변동 내역")
+                
+                # 내부 연산용으로 만든 날짜 열은 숨기고 출력
+                display_history = item_history.drop(columns=['변경일자_dt'], errors='ignore')
+                st.dataframe(display_history, use_container_width=True)
+
+# ==========================================
+# 3. 매입 자료 입력
 # ==========================================
 elif menu_choice == "매입 자료 입력":
     st.title("📝 원부자재 매입 내역 등록")
@@ -155,7 +201,7 @@ elif menu_choice == "매입 자료 입력":
     else: st.info("입력된 매입 데이터가 없습니다.")
 
 # ==========================================
-# 💡 3. 거래처 등록 및 수정 (타입 에러 완벽 해결)
+# 4. 거래처 등록
 # ==========================================
 elif menu_choice == "거래처 등록":
     st.title("🏢 거래처 등록 및 정보 수정")
@@ -225,12 +271,10 @@ elif menu_choice == "거래처 등록":
         else: 
             if not df.empty and '거래처명' in df.columns and selected_vendor in df['거래처명'].values:
                 idx = df[df['거래처명'] == selected_vendor].index[0]
-                
-                # 💡 핵심 해결 코드: 값을 덮어쓰기 전에 모든 대상 열을 'object(문자 허용)' 타입으로 변환합니다.
                 for key, val in new_vendor_data.items():
                     if key not in df.columns:
                         df[key] = "" 
-                    df[key] = df[key].astype(object) # 숫자형 칸이어도 문자를 받을 수 있게 강제 변환
+                    df[key] = df[key].astype(object) 
                     df.at[idx, key] = val
                     
                 conn.update(worksheet="거래처", data=df)
@@ -242,7 +286,7 @@ elif menu_choice == "거래처 등록":
     else: st.info("등록된 거래처가 없습니다.")
 
 # ==========================================
-# 4. 품목 등록
+# 5. 품목 등록
 # ==========================================
 elif menu_choice == "품목 등록":
     st.title("📦 품목 등록/수정")
@@ -279,16 +323,16 @@ elif menu_choice == "품목 등록":
     else: st.info("등록된 품목이 없습니다.")
 
 # ==========================================
-# 5. 단가변동이력
+# 6. 단가변동이력
 # ==========================================
 elif menu_choice == "단가변동이력":
-    st.title("📈 품목별 단가 변동 이력")
+    st.title("📈 품목별 단가 변동 이력 (전체)")
     df = load_data("단가이력")
     if not df.empty: st.dataframe(df, use_container_width=True)
     else: st.info("아직 변경된 단가 이력이 없습니다.")
 
 # ==========================================
-# 6. 거래처별 내역
+# 7. 거래처별 내역
 # ==========================================
 elif menu_choice == "거래처별 내역":
     st.title("🔍 거래처 및 품목별 매입 조회")
@@ -345,7 +389,7 @@ elif menu_choice == "거래처별 내역":
             st.success(f"💰 선택된 조건의 매입 총액: **{int(total_sum):,}원**")
 
 # ==========================================
-# 7. 거래처별 월마감 대금 정산서
+# 8. 거래처별 월마감 대금 정산서
 # ==========================================
 elif menu_choice == "월마감 정산서":
     st.title("🖨️ 거래처별 월마감 대금 정산서")
