@@ -2,19 +2,30 @@ import streamlit as st
 import pandas as pd
 from datetime import date, timedelta
 from streamlit_gsheets import GSheetsConnection
+import altair as alt
 
 # 1. 페이지 설정
 st.set_page_config(page_title="현대다이텍 시스템", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 2. 인쇄 최적화 CSS
+# 2. 인쇄 최적화 CSS (정산서 외 모든 UI 숨김)
 st.markdown("""
     <style>
     @media print {
-        [data-testid="stSidebar"], .stAppHeader, .stButton, .stForm, .stRadio, .stMetric, .stInfo { display: none !important; }
-        #printable-area { display: block !important; width: 100% !important; }
-        table { width: 100% !important; border-collapse: collapse !important; table-layout: fixed !important; }
-        th, td { border: 1px solid black !important; padding: 8px !important; word-wrap: break-word !important; }
+        /* 사이드바, 헤더, 버튼 등 모든 UI 요소 숨김 */
+        [data-testid="stSidebar"], .stAppHeader, .stButton, .stForm, .stRadio, .stMetric, .stInfo, footer { 
+            display: none !important; 
+        }
+        /* 메인 컨테이너에서 인쇄 영역만 표시 */
+        .stApp { background: white !important; }
+        #printable-area { 
+            display: block !important; 
+            width: 100% !important; 
+            margin: 0 !important; 
+            padding: 20px !important; 
+        }
+        table { width: 100% !important; border-collapse: collapse !important; }
+        th, td { border: 1px solid black !important; padding: 8px !important; }
         h2, h3 { color: black !important; }
     }
     </style>
@@ -33,14 +44,14 @@ def load_data(ws):
 
 st.title("🏢 현대다이텍 시스템")
 
-# 4. 사이드바 메뉴 (단가 검색 삭제, 7개 메뉴 구성)
+# 4. 사이드바 메뉴
 if st.sidebar.button("🔄 시스템 새로고침"): st.cache_data.clear(); st.rerun()
 menu = st.sidebar.radio("메뉴 선택", (
     "종합 대시보드", "매입 자료 입력", "거래처 등록", 
     "품목 등록", "단가변동이력", "거래처별 내역", "월마감 정산서"
 ))
 
-# 5. 각 메뉴별 상세 구현
+# 5. 각 메뉴별 구현
 if menu == "종합 대시보드":
     st.subheader("📊 월간 매입 종합 대시보드")
     df = load_data("매입자료")
@@ -50,12 +61,20 @@ if menu == "종합 대시보드":
         curr = df[(df['매입일자'].dt.month == t.month) & (df['매입일자'].dt.year == t.year)]
         prev_m = 12 if t.month == 1 else t.month - 1
         prev = df[df['매입일자'].dt.month == prev_m]
+        
         c1, c2, c3 = st.columns(3)
         c1.metric("이번 달 총 매입액", f"{int(curr['총액'].sum()):,} 원", f"전월 대비 {int(curr['총액'].sum() - prev['총액'].sum()):,} 원")
         c2.metric("이번 달 매입 건수", f"{len(curr)} 건")
         if not curr.empty: c3.metric("최다 매입 거래처", curr.groupby('거래처')['총액'].sum().idxmax())
-        st.subheader("🏆 거래처별 매입 비중")
-        if not curr.empty: st.bar_chart(curr.groupby('거래처')['총액'].sum())
+        
+        st.subheader("🏆 거래처별 매입 비중 (가로 배열)")
+        if not curr.empty:
+            chart_df = curr.groupby('거래처')['총액'].sum().reset_index()
+            chart = alt.Chart(chart_df).mark_bar().encode(
+                x=alt.X('거래처', axis=alt.Axis(labelAngle=0)), 
+                y='총액'
+            )
+            st.altair_chart(chart, use_container_width=True)
 
 elif menu == "매입 자료 입력":
     st.subheader("📝 원부자재 매입 내역 등록")
@@ -98,7 +117,6 @@ elif menu == "품목 등록":
     st.subheader("📦 품목 등록 / 수정 및 단가 조회")
     mode = st.radio("작업", ["신규 등록", "정보 수정", "조회"], horizontal=True)
     df_i, df_v = load_data("품목"), load_data("거래처")
-    
     if mode in ["신규 등록", "정보 수정"]:
         with st.form("item_form", clear_on_submit=True):
             target = st.selectbox("품목 선택", df_i['제품명'].tolist()) if mode=="정보 수정" else None
@@ -113,11 +131,10 @@ elif menu == "품목 등록":
                     df_i.at[idx, '제품명'] = n; df_i.at[idx, '주거래처'] = v; df_i.at[idx, '단가'] = p
                     conn.update("품목", df_i)
                 st.rerun()
-    else:
-        st.write("🔎 품목별 단가 검색")
-        q = st.text_input("검색할 품목명을 입력하세요 (전체 조회 시 공란)")
-        df_view = df_i[df_i['제품명'].str.contains(q)] if q else df_i
-        st.dataframe(df_view, use_container_width=True)
+    elif mode == "조회":
+        q = st.text_input("🔎 품명 검색")
+        if q: df_i = df_i[df_i['제품명'].str.contains(q)]
+    st.markdown("---"); st.subheader("📋 전체 품목 내역"); st.dataframe(df_i, use_container_width=True)
 
 elif menu == "단가변동이력":
     st.subheader("📈 단가 변동 전체 이력")
