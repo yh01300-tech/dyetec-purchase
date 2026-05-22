@@ -22,12 +22,12 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 2. 데이터 로드 함수
+# 2. 데이터 로드 함수 (입력 중 구글 서버 폭주를 막기 위해 10초간 캐시 유지)
 def load_data(ws): 
-    try: return conn.read(worksheet=ws, ttl=0)
+    try: return conn.read(worksheet=ws, ttl=10)
     except: return pd.DataFrame()
 
-# 단가 자동 반영 콜백 (콤마, 문자, 빈칸 완벽 방어)
+# 단가 자동 반영 콜백
 def on_item_change():
     item = st.session_state.item_select
     df_i = load_data("품목")
@@ -36,7 +36,6 @@ def on_item_change():
         if not match.empty:
             raw_price = match.iloc[0]['단가']
             try:
-                # 콤마, 원, 공백 등을 모두 제거하고 숫자로 변환
                 clean_price = str(raw_price).replace(',', '').replace('원', '').strip()
                 st.session_state.price_input = int(float(clean_price))
             except Exception:
@@ -84,7 +83,6 @@ elif menu == "매입 자료 입력":
     st.subheader("📝 원부자재 매입 내역 등록")
     df_v, df_i = load_data("거래처"), load_data("품목")
     
-    # 단가 입력값 세션 초기화
     if 'price_input' not in st.session_state:
         if not df_i.empty and '단가' in df_i.columns:
             try:
@@ -107,9 +105,11 @@ elif menu == "매입 자료 입력":
     rem = st.text_input("비고")
     
     if st.button("✅ 내역 등록"):
-        df = conn.read(worksheet="매입자료", ttl=0)
+        st.cache_data.clear() # 등록 직전 캐시 초기화 (실시간 데이터 호출 준비)
+        df = conn.read(worksheet="매입자료", ttl=0) 
         new_row = pd.DataFrame([{"매입일자":str(d), "거래처":v, "품목명":i, "수량":q, "총액":q*p, "비고":rem}])
         conn.update(worksheet="매입자료", data=pd.concat([df, new_row], ignore_index=True))
+        st.cache_data.clear() # 반영 후 캐시 다시 초기화
         st.success("매입 내역이 성공적으로 누적 등록되었습니다.")
         st.rerun()
         
@@ -127,8 +127,10 @@ elif menu == "거래처 등록":
         p1 = c1.text_input("연락처1"); p2 = c2.text_input("연락처2")
         fax = c2.text_input("팩스번호"); rem = c2.text_input("비고")
         if st.button("💾 저장"):
+            st.cache_data.clear()
             df = conn.read(worksheet="거래처", ttl=0)
             conn.update(worksheet="거래처", data=pd.concat([df, pd.DataFrame([{"거래처명":n, "사업자등록번호":b, "연락처1":p1, "연락처2":p2, "팩스번호":fax, "비고":rem}])], ignore_index=True))
+            st.cache_data.clear()
             st.rerun()
     else:
         target = st.selectbox("거래처 선택", df_v['거래처명'].tolist() if not df_v.empty else [])
@@ -142,12 +144,14 @@ elif menu == "거래처 등록":
             new_fax = c2.text_input("팩스번호", value=row['팩스번호'])
             new_rem = c2.text_input("비고", value=row['비고'])
             if st.button("💾 수정 저장"):
+                st.cache_data.clear()
                 df = conn.read(worksheet="거래처", ttl=0)
                 idx = df.index[df['거래처명'] == target][0]
                 df.at[idx, '거래처명'] = new_n; df.at[idx, '사업자등록번호'] = new_b
                 df.at[idx, '연락처1'] = new_p1; df.at[idx, '연락처2'] = new_p2
                 df.at[idx, '팩스번호'] = new_fax; df.at[idx, '비고'] = new_rem
                 conn.update(worksheet="거래처", data=df)
+                st.cache_data.clear()
                 st.rerun()
     st.dataframe(df_v, use_container_width=True)
 
@@ -160,18 +164,29 @@ elif menu == "품목 등록":
         if target:
             row = df_i[df_i['제품명']==target].iloc[0]
             new_v = st.selectbox("거래처 변경", df_v['거래처명'].tolist() if not df_v.empty else [], index=df_v['거래처명'].tolist().index(row['주거래처']) if row['주거래처'] in df_v['거래처명'].tolist() else 0)
-            new_p = st.number_input("단가 변경", value=int(row['단가']) if pd.notna(row['단가']) else 0)
+            
+            raw_p = row['단가']
+            try:
+                clean_p = int(float(str(raw_p).replace(',', '').replace('원', '').strip()))
+            except Exception:
+                clean_p = 0
+                
+            new_p = st.number_input("단가 변경", value=clean_p)
             if st.button("💾 수정 완료"):
+                st.cache_data.clear()
                 df = conn.read(worksheet="품목", ttl=0)
                 idx = df.index[df['제품명'] == target][0]
                 df.at[idx, '주거래처'] = new_v; df.at[idx, '단가'] = new_p
                 conn.update(worksheet="품목", data=df)
+                st.cache_data.clear()
                 st.rerun()
     else:
         n = st.text_input("품목명"); v = st.selectbox("주 거래처", df_v['거래처명'].tolist() if not df_v.empty else []); p = st.number_input("단가", 0)
         if st.button("💾 신규 등록"):
+            st.cache_data.clear()
             df = conn.read(worksheet="품목", ttl=0)
             conn.update(worksheet="품목", data=pd.concat([df, pd.DataFrame([{"제품명":n, "주거래처":v, "단가":p}])], ignore_index=True))
+            st.cache_data.clear()
             st.rerun()
     st.dataframe(df_i, use_container_width=True)
 
@@ -191,11 +206,8 @@ elif menu == "거래처별 내역":
         date_range = c2.date_input("조회 기간 선택", value=(date.today() - timedelta(days=30), date.today()))
         i = c3.selectbox("품목 선택", ["전체"] + df['품목명'].dropna().unique().tolist())
         
-        # 필터링 적용
-        if v != "전체": 
-            df = df[df['거래처'] == v]
-        if i != "전체": 
-            df = df[df['품목명'] == i]
+        if v != "전체": df = df[df['거래처'] == v]
+        if i != "전체": df = df[df['품목명'] == i]
             
         if len(date_range) == 2:
             start_d, end_d = date_range
