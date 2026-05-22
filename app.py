@@ -42,7 +42,7 @@ menu = st.sidebar.radio("메뉴 선택", (
     "품목 등록", "단가변동이력", "거래처별 내역", "월마감 정산서"
 ))
 
-# 6. 각 메뉴별 상세 구현
+# 6. 각 메뉴별 기능 구현
 if menu == "종합 대시보드":
     st.subheader("📊 월간 매입 종합 대시보드")
     df = load_data("매입자료")
@@ -69,10 +69,25 @@ if menu == "종합 대시보드":
             st.altair_chart(chart, use_container_width=True)
 
 elif menu == "단가 검색":
-    st.subheader("🔎 전체 품목 단가 이력")
+    st.subheader("🔎 품명 및 거래처별 단가 조회")
     df_h = load_data("단가이력")
     if not df_h.empty:
-        st.dataframe(df_h.sort_values('변경일자', ascending=False), use_container_width=True)
+        c1, c2 = st.columns(2)
+        # 필터링
+        items = ["전체"] + df_h['품목명'].unique().tolist()
+        vendors = ["전체"] + df_h['거래처'].unique().tolist()
+        
+        sel_i = c1.selectbox("품명 선택", items)
+        sel_v = c2.selectbox("거래처 선택", vendors)
+        
+        df_f = df_h.copy()
+        if sel_i != "전체": df_f = df_f[df_f['품목명'] == sel_i]
+        if sel_v != "전체": df_f = df_f[df_f['거래처'] == sel_v]
+        
+        # 출력: 품목, 단가, 변동일
+        res = df_f[['품목명', '단가', '변경일자']].copy()
+        res.columns = ['품목', '단가', '변동일']
+        st.dataframe(res.sort_values('변동일', ascending=False), use_container_width=True)
 
 elif menu == "매입 자료 입력":
     st.subheader("📝 원부자재 매입 내역 등록")
@@ -124,10 +139,10 @@ elif menu == "품목 등록":
         row = df_i[df_i['제품명']==target].iloc[0] if target else {}
         n = st.text_input("품목명", value=row.get('제품명',''))
         
-        # 주 거래처 선택 오류 수정: 안전하게 인덱스 할당
+        # 거래처 선택 로직 보완
         options = df_v['거래처명'].tolist()
-        current_vendor = row.get('주거래처')
-        idx = options.index(current_vendor) if current_vendor in options else 0
+        val = row.get('주거래처')
+        idx = options.index(val) if val in options else 0
         v = st.selectbox("주 거래처", options, index=idx)
         
         p = st.number_input("단가", value=int(row.get('단가', 0)))
@@ -145,7 +160,7 @@ elif menu == "단가변동이력":
     st.dataframe(load_data("단가이력"), use_container_width=True)
 
 elif menu == "거래처별 내역":
-    st.subheader("🔍 기간/거래처/품목별 상세 조회")
+    st.subheader("🔍 상세 내역 조회")
     df = load_data("매입자료")
     if not df.empty:
         df['매입일자'] = pd.to_datetime(df['매입일자'], errors='coerce')
@@ -165,9 +180,10 @@ elif menu == "거래처별 내역":
 elif menu == "월마감 정산서":
     st.title("🖨️ 월마감 정산서")
     df = load_data("매입자료")
-    if not df.empty:
+    if not df.empty and '매입일자' in df.columns:
         df['매입일자'] = pd.to_datetime(df['매입일자'], errors='coerce')
-        ym = st.selectbox("월", sorted(df['매입일자'].dt.strftime('%Y-%m').unique().tolist(), reverse=True))
-        v = st.selectbox("거래처", df['거래처'].unique().tolist())
-        f = df[(df['매입일자'].dt.strftime('%Y-%m') == ym) & (df['거래처'] == v)]
-        st.markdown(f"<div id='printable-area'><h2>[{v}] {ym}월 매입 정산서</h2>{f.to_html(index=False)}<h3>합계: {int(f['총액'].sum()):,} 원</h3></div>", unsafe_allow_html=True)
+        sel_ym = st.selectbox("월 선택", sorted(df['매입일자'].dt.strftime('%Y-%m').unique().tolist(), reverse=True))
+        sel_v = st.selectbox("거래처 선택", df['거래처'].unique().tolist())
+        filtered = df[(df['매입일자'].dt.strftime('%Y-%m') == sel_ym) & (df['거래처'] == sel_v)]
+        
+        st.markdown(f"""<div id='printable-area'><h2>[{sel_v}] {sel_ym}월 매입 정산서</h2>{filtered.to_html(index=False)}<h3>합계 금액: {int(filtered['총액'].sum()):,} 원</h3></div>""", unsafe_allow_html=True)
