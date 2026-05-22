@@ -4,29 +4,16 @@ from datetime import date, timedelta
 from streamlit_gsheets import GSheetsConnection
 import altair as alt
 
-# 1. 페이지 설정 및 CSS
+# 1. 설정 및 연결
 st.set_page_config(page_title="현대다이텍 통합 시스템", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-st.markdown("""
-    <style>
-    table { width: 100% !important; border-collapse: collapse !important; }
-    th, td { border: 1px solid black !important; padding: 8px !important; text-align: center !important; }
-    @media print {
-        [data-testid="stSidebar"], .stButton { display: none !important; }
-        h1, h2, h3, h4, h5, h6 { display: none !important; } 
-        #printable-area { display: block !important; width: 100% !important; margin: 0 !important; }
-        table { font-size: 9pt !important; }
-    }
-    </style>
-""", unsafe_allow_html=True)
-
-# 2. 데이터 관리
+# 2. 데이터 로드 (캐시 설정으로 속도와 안정성 확보)
 def load_data(ws): 
     try: return conn.read(worksheet=ws, ttl=5)
     except: return pd.DataFrame()
 
-# 단가 안전 업데이트
+# 3. 단가 자동 반영 함수 (문자열/빈칸 방어)
 def on_item_change():
     item = st.session_state.get('item_select')
     df_i = load_data("품목")
@@ -41,12 +28,13 @@ def on_item_change():
 
 st.title("🏢 현대다이텍 통합 관리 시스템")
 
+# 4. 사이드바 메뉴
 menu = st.sidebar.radio("메뉴 선택", (
     "종합 대시보드", "매입 자료 입력", "거래처 등록", 
     "품목 등록", "단가변동이력", "거래처별 내역", "월마감 정산서"
 ))
 
-# 3. 메뉴 구현
+# 5. 메뉴별 로직
 if menu == "종합 대시보드":
     st.subheader("📊 월간 매입 종합 대시보드")
     df = load_data("매입자료")
@@ -80,7 +68,6 @@ elif menu == "매입 자료 입력":
         df = conn.read(worksheet="매입자료", ttl=0)
         new_row = pd.DataFrame([{"매입일자":str(d), "거래처":v, "품목명":i, "수량":int(q), "단가":int(p), "총액":int(q*p), "비고":rem}])
         conn.update(worksheet="매입자료", data=pd.concat([df, new_row], ignore_index=True))
-        st.success("등록 완료")
         st.rerun()
     st.subheader("📋 전체 매입 내역")
     st.dataframe(load_data("매입자료").sort_values('매입일자', ascending=False), use_container_width=True)
@@ -112,7 +99,7 @@ elif menu == "거래처 등록":
                 for col, val in zip(['거래처명','사업자등록번호','연락처1','연락처2','팩스번호','비고'], [n,b,p1,p2,fax,rem]): df.at[idx, col] = val
                 conn.update(worksheet="거래처", data=df)
                 st.rerun()
-    st.dataframe(df_v)
+    st.dataframe(df_v, use_container_width=True)
 
 elif menu == "품목 등록":
     st.subheader("📦 품목 등록 / 수정")
@@ -136,22 +123,23 @@ elif menu == "품목 등록":
             df = conn.read(worksheet="품목", ttl=0)
             conn.update(worksheet="품목", data=pd.concat([df, pd.DataFrame([{"제품명":n, "주거래처":v, "단가":p}])], ignore_index=True))
             st.rerun()
-    st.dataframe(df_i)
+    st.dataframe(df_i, use_container_width=True)
 
-elif menu == "단가변동이력": st.dataframe(load_data("단가이력"))
+elif menu == "단가변동이력": st.dataframe(load_data("단가이력"), use_container_width=True)
+
 elif menu == "거래처별 내역":
-    st.subheader("🔍 기간/거래처별 상세 조회")
+    st.subheader("🔍 상세 조회 (기간/거래처/품목)")
     df = load_data("매입자료")
     if not df.empty:
         df['매입일자'] = pd.to_datetime(df['매입일자'], errors='coerce')
         c1, c2, c3 = st.columns(3)
         v = c1.selectbox("거래처", ["전체"] + df['거래처'].dropna().unique().tolist())
-        d_range = c2.date_input("기간 선택", value=(date.today()-timedelta(30), date.today()))
+        d_range = c2.date_input("기간", value=(date.today()-timedelta(30), date.today()))
         i = c3.selectbox("품목", ["전체"] + df['품목명'].dropna().unique().tolist())
         if v != "전체": df = df[df['거래처'] == v]
         if i != "전체": df = df[df['품목명'] == i]
         if len(d_range)==2: df = df[(df['매입일자'].dt.date >= d_range[0]) & (df['매입일자'].dt.date <= d_range[1])]
-        st.dataframe(df.sort_values('매입일자', ascending=False))
+        st.dataframe(df.sort_values('매입일자', ascending=False), use_container_width=True)
 
 elif menu == "월마감 정산서":
     st.title("🖨️ 월마감 정산서")
@@ -163,5 +151,5 @@ elif menu == "월마감 정산서":
         f = df[(df['매입일자'].dt.strftime('%Y-%m') == ym) & (df['거래처'] == v)].sort_values('매입일자')
         if not f.empty:
             f['매입일자'] = f['매입일자'].dt.strftime('%Y-%m-%d')
-            f_print = f[['매입일자', '거래처', '품목명', '수량', '단가', '총액', '비고']]
-            st.markdown(f"<div id='printable-area'>{f_print.to_html(index=False)}<div style='font-size:16px; font-weight:bold; margin-top:10px;'>토탈금액: {int(f['총액'].sum()):,} 원</div></div>", unsafe_allow_html=True)
+            st.dataframe(f[['매입일자', '거래처', '품목명', '수량', '단가', '총액', '비고']], use_container_width=True)
+            st.markdown(f"**토탈 금액: {int(f['총액'].sum()):,} 원**")
