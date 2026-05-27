@@ -4,39 +4,44 @@ from datetime import date, timedelta
 from streamlit_gsheets import GSheetsConnection
 import altair as alt
 
-# 1. 페이지 설정 및 연결 (아이콘 및 타이틀 변경)
+# 1. 페이지 설정 및 연결
 st.set_page_config(page_title="현대다이텍 통합 ERP", page_icon="🏢", layout="wide", initial_sidebar_state="expanded")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 2. ERP 스타일 커스텀 CSS 적용
+# 2. ERP 스타일 커스텀 CSS 및 인쇄 전용 스타일 적용
 st.markdown("""
     <style>
     /* 전체 배경 및 폰트 미세 조정 */
     .block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; }
     
-    /* 주요 버튼 스타일 (ERP 특유의 강조 버튼) */
-    div.stButton > button:first-child {
-        background-color: #0052CC; color: white; border-radius: 4px; font-weight: bold; border: none; padding: 0.5rem 1rem;
-    }
+    /* 주요 버튼 스타일 */
+    div.stButton > button:first-child { background-color: #0052CC; color: white; border-radius: 4px; font-weight: bold; border: none; padding: 0.5rem 1rem; }
     div.stButton > button:first-child:hover { background-color: #003d99; border: none; }
-    
-    /* 삭제/초기화 등 경고 버튼 스타일 */
-    div[data-testid="column"]:nth-of-type(2) div.stButton > button:first-child {
-        background-color: #f4f5f7; color: #de350b; border: 1px solid #de350b;
-    }
+    div[data-testid="column"]:nth-of-type(2) div.stButton > button:first-child { background-color: #f4f5f7; color: #de350b; border: 1px solid #de350b; }
     div[data-testid="column"]:nth-of-type(2) div.stButton > button:first-child:hover { background-color: #ffebe6; }
 
-    /* 테이블 스타일 (인쇄 및 화면 공통) */
+    /* 화면 출력용 테이블 스타일 */
     table { width: 100% !important; border-collapse: collapse !important; font-size: 14px; }
     th { background-color: #f4f5f7 !important; color: #172b4d !important; font-weight: 600 !important; border-bottom: 2px solid #dfe1e6 !important; padding: 10px !important; text-align: center !important; }
     td { border-bottom: 1px solid #dfe1e6 !important; padding: 10px !important; text-align: center !important; }
     
-    /* 인쇄 전용 스타일 */
+    /* 평상시 인쇄 영역 숨김 */
+    #printable-area { display: none; }
+    
+    /* 인쇄 전용 (Ctrl+P / Cmd+P) 스타일 */
     @media print {
-        [data-testid="stSidebar"], .stButton, header, footer { display: none !important; }
-        #printable-area { display: block !important; width: 100% !important; margin: 0 !important; }
-        table { font-size: 11px !important; }
-        th, td { border: 1px solid black !important; padding: 4px !important; }
+        /* Streamlit UI 요소(사이드바, 헤더, 툴바, 셀렉트박스 등) 완전 숨김 */
+        [data-testid="stSidebar"], header, footer, .stButton, [data-testid="stToolbar"], [data-testid="stDecoration"] { display: none !important; }
+        [data-testid="stSelectbox"], [data-testid="stCaptionContainer"] { display: none !important; }
+        [data-testid="stDataFrame"] { display: none !important; } /* 화면용 데이터프레임 숨김 */
+        div[data-testid="stMarkdownContainer"] h2, div[data-testid="stMarkdownContainer"] div[style*="background-color: #f4f5f7"] { display: none !important; }
+        
+        /* 지정된 인쇄 영역만 활성화 */
+        #printable-area { display: block !important; width: 100% !important; margin: 0 !important; color: black !important; }
+        #printable-area h2 { text-align: center !important; font-size: 24px !important; margin-bottom: 20px !important; color: black !important; }
+        #printable-area table { width: 100% !important; border-collapse: collapse !important; font-size: 11pt !important; border: 2px solid black !important; }
+        #printable-area th, #printable-area td { border: 1px solid black !important; padding: 8px !important; color: black !important; text-align: center !important; }
+        #printable-area th { background-color: #f2f2f2 !important; font-weight: bold !important; }
     }
     </style>
 """, unsafe_allow_html=True)
@@ -62,7 +67,7 @@ def on_item_change():
         else: st.session_state.price_input = 0
     else: st.session_state.price_input = 0
 
-# 4. 사이드바 구성 (메뉴명 ERP 표준화)
+# 4. 사이드바 구성
 st.sidebar.markdown("### ⚙️ H-DYETEC ERP")
 st.sidebar.markdown("---")
 menu = st.sidebar.radio("Navigation", (
@@ -115,14 +120,12 @@ elif menu == "📝 매입 전표 입력":
     st.caption("신규 매입 전표를 일괄 등록하거나, 잘못 입력된 전표를 삭제할 수 있습니다.")
     st.divider()
     
-    # 세련된 Tab UI 적용
     tab1, tab2, tab3 = st.tabs(["➕ 전표 일괄 입력 (장바구니)", "📋 전표 원장 현황", "🗑️ 오등록 전표 삭제"])
     
     with tab1:
         st.markdown("#### 신규 전표 등록")
         df_v, df_i = load_data("거래처"), load_data("품목")
         
-        # 입력 폼을 깔끔하게 박스 형태로 구성
         with st.container():
             c1, c2, c3, c4 = st.columns([1.5, 2, 1, 1])
             d = c1.date_input("매입 일자")
@@ -262,7 +265,6 @@ elif menu == "🔍 매입 원장 상세조회":
     if not df.empty:
         df['매입일자'] = pd.to_datetime(df['매입일자'], errors='coerce')
         
-        # 필터 박스 UI
         with st.container():
             c1, c2, c3 = st.columns(3)
             d_range = c1.date_input("조회 기간 설정", value=(date.today()-timedelta(30), date.today()))
@@ -295,16 +297,46 @@ elif menu == "🖨️ 월마감 정산서 출력":
         f = df[(df['매입일자'].dt.strftime('%Y-%m') == ym) & (df['거래처'] == v)].sort_values('매입일자')
         if not f.empty:
             f['매입일자'] = f['매입일자'].dt.strftime('%Y-%m-%d')
+            
+            # 화면 표시용 데이터
             st.dataframe(f[['매입일자', '거래처', '품목명', '수량', '단가', '총액', '비고']], use_container_width=True)
             
-            # 하단 총액 강조 박스
             st.markdown(f"""
             <div style="background-color: #f4f5f7; padding: 20px; border-radius: 5px; text-align: right; border-left: 5px solid #0052CC;">
                 <h3 style="margin: 0; color: #172b4d;">총 정산 금액: <span style="color: #0052CC;">{int(f['총액'].sum()):,}</span> 원</h3>
             </div>
             """, unsafe_allow_html=True)
             
-            # 실제 인쇄 시 화면에 나오는 HTML 영역 (평소엔 CSS로 숨김 처리됨)
-            st.markdown(f"<div id='printable-area'><h2>{ym}월 {v} 정산서</h2>{f[['매입일자', '거래처', '품목명', '수량', '단가', '총액', '비고']].to_html(index=False)}<div style='font-size:16px; font-weight:bold; margin-top:15px; text-align:right;'>총 정산 금액: {int(f['총액'].sum()):,} 원</div></div>", unsafe_allow_html=True)
+            # 인쇄 전용 데이터프레임 구성 (요청하신 7개 항목)
+            f_print = f.copy()
+            f_print.insert(0, '거래월', ym)
+            f_print.rename(columns={
+                '거래처': '거래처명',
+                '매입일자': '거래일',
+                '품목명': '품목',
+                '총액': '합계액'
+            }, inplace=True)
+            
+            # 지정된 순서대로 컬럼 추출
+            f_print = f_print[['거래월', '거래처명', '거래일', '품목', '수량', '단가', '합계액']]
+            
+            # 숫자 콤마 처리 및 NaN(비어있는 값) 정리
+            f_print = f_print.fillna("")
+            for col in ['수량', '단가', '합계액']:
+                f_print[col] = pd.to_numeric(f_print[col], errors='coerce').fillna(0)
+                f_print[col] = f_print[col].apply(lambda x: f"{int(x):,}" if x != 0 else "")
+                
+            html_table = f_print.to_html(index=False)
+            
+            # 인쇄 영역 HTML (숨김 처리 후 인쇄 시에만 표시되도록 구성)
+            st.markdown(f"""
+            <div id='printable-area'>
+                <h2>{ym}월 {v} 정산서</h2>
+                {html_table}
+                <div style='font-size:18px; font-weight:bold; margin-top:20px; text-align:right;'>
+                    총 정산 합계액: {int(f['총액'].sum()):,} 원
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
         else:
             st.warning("해당 조건의 정산 내역이 존재하지 않습니다.")
