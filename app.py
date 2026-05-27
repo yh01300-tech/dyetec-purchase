@@ -54,23 +54,56 @@ if menu == "종합 대시보드":
             ), use_container_width=True)
 
 elif menu == "매입 자료 입력":
-    st.subheader("📝 원부자재 매입 내역 등록")
-    df_v, df_i = load_data("거래처"), load_data("품목")
-    if 'price_input' not in st.session_state: st.session_state.price_input = 0
-    c1, c2 = st.columns(2)
-    d = c1.date_input("매입 일자")
-    v = c1.selectbox("거래처", df_v['거래처명'].tolist() if not df_v.empty else [])
-    i = c2.selectbox("품목", df_i['제품명'].tolist() if not df_i.empty else [], key="item_select", on_change=on_item_change)
-    q = c2.number_input("수량", min_value=0, value=1)
-    p = c2.number_input("단가", min_value=0, value=st.session_state.price_input, key="price_input")
-    rem = st.text_input("비고")
-    if st.button("✅ 내역 등록"):
-        df = conn.read(worksheet="매입자료", ttl=0)
-        new_row = pd.DataFrame([{"매입일자":str(d), "거래처":v, "품목명":i, "수량":int(q), "단가":int(p), "총액":int(q*p), "비고":rem}])
-        conn.update(worksheet="매입자료", data=pd.concat([df, new_row], ignore_index=True))
-        st.rerun()
+    st.subheader("📝 원부자재 매입 내역 관리")
+    mode = st.radio("작업 선택", ["신규 등록", "잘못된 내역 삭제"], horizontal=True)
+    
+    if mode == "신규 등록":
+        df_v, df_i = load_data("거래처"), load_data("품목")
+        if 'price_input' not in st.session_state: st.session_state.price_input = 0
+        c1, c2 = st.columns(2)
+        d = c1.date_input("매입 일자")
+        v = c1.selectbox("거래처", df_v['거래처명'].tolist() if not df_v.empty else [])
+        i = c2.selectbox("품목", df_i['제품명'].tolist() if not df_i.empty else [], key="item_select", on_change=on_item_change)
+        q = c2.number_input("수량", min_value=0, value=1)
+        p = c2.number_input("단가", min_value=0, value=st.session_state.price_input, key="price_input")
+        rem = st.text_input("비고")
+        if st.button("✅ 내역 등록"):
+            df = conn.read(worksheet="매입자료", ttl=0)
+            new_row = pd.DataFrame([{"매입일자":str(d), "거래처":v, "품목명":i, "수량":int(q), "단가":int(p), "총액":int(q*p), "비고":rem}])
+            conn.update(worksheet="매입자료", data=pd.concat([df, new_row], ignore_index=True))
+            st.success("등록이 완료되었습니다.")
+            st.rerun()
+            
+    else: # 잘못된 내역 삭제 기능
+        st.markdown("### 🗑️ 최근 매입 내역 삭제")
+        df_del = load_data("매입자료")
+        if not df_del.empty:
+            # 삭제를 위해 고유 인덱스와 내용을 결합하여 표시
+            df_del['표시'] = df_del.index.astype(str) + " ➡️ " + df_del['매입일자'].astype(str) + " | " + df_del['거래처'].astype(str) + " | " + df_del['품목명'].astype(str) + " | " + df_del['수량'].astype(str) + "개 | " + df_del['총액'].astype(str) + "원"
+            
+            # 가장 최근에 입력한 데이터를 찾기 쉽도록 역순으로 배치
+            del_options = df_del['표시'].tolist()[::-1]
+            target = st.selectbox("삭제할 내역을 확인하고 선택해 주십시오", del_options)
+            
+            if st.button("🗑️ 선택 내역 영구 삭제"):
+                del_idx = int(target.split(" ➡️ ")[0])
+                df_realtime = conn.read(worksheet="매입자료", ttl=0)
+                # 선택한 행만 완벽하게 삭제
+                df_realtime = df_realtime.drop(index=del_idx)
+                conn.update(worksheet="매입자료", data=df_realtime)
+                st.success("선택하신 내역이 구글 시트에서 완전히 삭제되었습니다.")
+                st.rerun()
+        else:
+            st.info("삭제할 매입 내역이 없습니다.")
+
+    st.markdown("---")
     st.subheader("📋 전체 매입 내역")
-    st.dataframe(load_data("매입자료").sort_values('매입일자', ascending=False), use_container_width=True)
+    df_display = load_data("매입자료")
+    if not df_display.empty:
+        # 삭제용으로 임시 생성했던 '표시' 컬럼이 보이지 않도록 제거 후 출력
+        if '표시' in df_display.columns:
+            df_display = df_display.drop(columns=['표시'])
+        st.dataframe(df_display.sort_values('매입일자', ascending=False), use_container_width=True)
 
 elif menu == "거래처 등록":
     st.subheader("🏢 거래처 등록 및 정보 수정")
