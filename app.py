@@ -8,39 +8,49 @@ import altair as alt
 st.set_page_config(page_title="현대다이텍 통합 ERP", page_icon="🏢", layout="wide", initial_sidebar_state="expanded")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 2. ERP 스타일 커스텀 CSS 및 인쇄 전용 스타일 적용
+# 2. ERP 스타일 커스텀 CSS 및 ★강력한 인쇄 전용 스타일 적용★
 st.markdown("""
     <style>
-    /* 전체 배경 및 폰트 미세 조정 */
+    /* 화면용 기본 스타일 */
     .block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; }
-    
-    /* 주요 버튼 스타일 */
     div.stButton > button:first-child { background-color: #0052CC; color: white; border-radius: 4px; font-weight: bold; border: none; padding: 0.5rem 1rem; }
     div.stButton > button:first-child:hover { background-color: #003d99; border: none; }
     div[data-testid="column"]:nth-of-type(2) div.stButton > button:first-child { background-color: #f4f5f7; color: #de350b; border: 1px solid #de350b; }
     div[data-testid="column"]:nth-of-type(2) div.stButton > button:first-child:hover { background-color: #ffebe6; }
 
-    /* 화면 출력용 테이블 스타일 */
+    /* 화면용 테이블 */
     table { width: 100% !important; border-collapse: collapse !important; font-size: 14px; }
     th { background-color: #f4f5f7 !important; color: #172b4d !important; font-weight: 600 !important; border-bottom: 2px solid #dfe1e6 !important; padding: 10px !important; text-align: center !important; }
     td { border-bottom: 1px solid #dfe1e6 !important; padding: 10px !important; text-align: center !important; }
     
-    /* 평상시 인쇄 영역 숨김 */
+    /* 평상시 인쇄 영역은 화면에서 숨김 */
     #printable-area { display: none; }
     
-    /* 인쇄 전용 (Ctrl+P / Cmd+P) 스타일 */
+    /* ★ 인쇄 전용 (Ctrl+P) 절대 규칙 ★ */
     @media print {
-        /* Streamlit UI 요소(사이드바, 헤더, 툴바, 셀렉트박스 등) 완전 숨김 */
-        [data-testid="stSidebar"], header, footer, .stButton, [data-testid="stToolbar"], [data-testid="stDecoration"] { display: none !important; }
-        [data-testid="stSelectbox"], [data-testid="stCaptionContainer"] { display: none !important; }
-        [data-testid="stDataFrame"] { display: none !important; } /* 화면용 데이터프레임 숨김 */
-        div[data-testid="stMarkdownContainer"] h2, div[data-testid="stMarkdownContainer"] div[style*="background-color: #f4f5f7"] { display: none !important; }
+        /* 1. 화면의 모든 요소를 투명하게 처리 (잔여 UI 노출 차단) */
+        body * { visibility: hidden !important; }
         
-        /* 지정된 인쇄 영역만 활성화 */
-        #printable-area { display: block !important; width: 100% !important; margin: 0 !important; color: black !important; }
-        #printable-area h2 { text-align: center !important; font-size: 24px !important; margin-bottom: 20px !important; color: black !important; }
-        #printable-area table { width: 100% !important; border-collapse: collapse !important; font-size: 11pt !important; border: 2px solid black !important; }
-        #printable-area th, #printable-area td { border: 1px solid black !important; padding: 8px !important; color: black !important; text-align: center !important; }
+        /* 2. 오직 인쇄 영역과 그 내부 요소만 보이게 설정 */
+        #printable-area, #printable-area * { visibility: visible !important; }
+        
+        /* 3. 인쇄 영역을 페이지 맨 위 왼쪽으로 강제 이동 */
+        #printable-area {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+        }
+        
+        /* 4. 폰트 축소 및 표 디자인 (대리님 요청 반영) */
+        #printable-area table { 
+            width: 100% !important; 
+            border-collapse: collapse !important; 
+            font-size: 9pt !important; /* 폰트 작게 */
+            border: 2px solid black !important; 
+        }
+        #printable-area h2 { font-size: 14pt !important; text-align: center !important; margin-bottom: 20px !important; }
+        #printable-area th, #printable-area td { border: 1px solid black !important; padding: 6px !important; color: black !important; text-align: center !important; }
         #printable-area th { background-color: #f2f2f2 !important; font-weight: bold !important; }
     }
     </style>
@@ -85,9 +95,7 @@ st.sidebar.caption("ⓒ 2026 Hyundai Dyetec SCM Team")
 # 5. 메인 화면 로직
 if menu == "📊 경영 대시보드":
     st.markdown("## 📊 경영 대시보드")
-    st.caption("당월 기준 원부자재 매입 현황 및 거래처별 비중 요약")
     st.divider()
-    
     df = load_data("매입자료")
     if not df.empty and '매입일자' in df.columns:
         df['매입일자'] = pd.to_datetime(df['매입일자'], errors='coerce')
@@ -103,29 +111,23 @@ if menu == "📊 경영 대시보드":
             st.metric("당월 매입 전표 건수", f"{len(curr)} 건")
         with c3:
             if not curr.empty: 
-                top_vendor = curr.groupby('거래처')['총액'].sum().idxmax()
-                st.metric("당월 최다 매입 거래처", top_vendor)
+                st.metric("당월 최다 매입 거래처", curr.groupby('거래처')['총액'].sum().idxmax())
         
         st.markdown("<br><br>#### 🏆 거래처별 매입 비중", unsafe_allow_html=True)
         if not curr.empty:
-            chart = alt.Chart(curr.groupby('거래처')['총액'].sum().reset_index()).mark_bar(color='#0052CC', cornerRadiusTopLeft=3, cornerRadiusTopRight=3).encode(
+            chart = alt.Chart(curr.groupby('거래처')['총액'].sum().reset_index()).mark_bar(color='#0052CC').encode(
                 x=alt.X('거래처', axis=alt.Axis(labelAngle=0, title=None)), 
-                y=alt.Y('총액', axis=alt.Axis(title='매입액 (원)')),
-                tooltip=['거래처', '총액']
+                y=alt.Y('총액', axis=alt.Axis(title='매입액 (원)'))
             ).properties(height=350)
             st.altair_chart(chart, use_container_width=True)
 
 elif menu == "📝 매입 전표 입력":
     st.markdown("## 📝 매입 전표 관리")
-    st.caption("신규 매입 전표를 일괄 등록하거나, 잘못 입력된 전표를 삭제할 수 있습니다.")
     st.divider()
-    
-    tab1, tab2, tab3 = st.tabs(["➕ 전표 일괄 입력 (장바구니)", "📋 전표 원장 현황", "🗑️ 오등록 전표 삭제"])
+    tab1, tab2, tab3 = st.tabs(["➕ 전표 일괄 입력", "📋 전표 원장 현황", "🗑️ 오등록 전표 삭제"])
     
     with tab1:
-        st.markdown("#### 신규 전표 등록")
         df_v, df_i = load_data("거래처"), load_data("품목")
-        
         with st.container():
             c1, c2, c3, c4 = st.columns([1.5, 2, 1, 1])
             d = c1.date_input("매입 일자")
@@ -145,16 +147,13 @@ elif menu == "📝 매입 전표 입력":
 
         if not st.session_state.temp_entries.empty:
             st.markdown("---")
-            st.markdown("#### ⏳ 전송 대기 목록")
             st.dataframe(st.session_state.temp_entries, use_container_width=True)
-            
             col_a, col_b = st.columns(2)
             with col_a:
-                if st.button("🚀 서버로 일괄 전송 (확정)"):
+                if st.button("🚀 서버로 일괄 전송"):
                     df = conn.read(worksheet="매입자료", ttl=0)
                     conn.update(worksheet="매입자료", data=pd.concat([df, st.session_state.temp_entries], ignore_index=True))
                     st.session_state.temp_entries = pd.DataFrame(columns=["매입일자", "거래처", "품목명", "수량", "단가", "총액", "비고"])
-                    st.success("데이터베이스에 전표가 일괄 등록되었습니다.")
                     st.rerun()
             with col_b:
                 if st.button("초기화 (대기열 비우기)"):
@@ -162,34 +161,25 @@ elif menu == "📝 매입 전표 입력":
                     st.rerun()
 
     with tab2:
-        st.markdown("#### 최근 등록된 전표 내역")
         df_display = load_data("매입자료")
         if not df_display.empty:
             st.dataframe(df_display.sort_values('매입일자', ascending=False), use_container_width=True)
             
     with tab3:
-        st.markdown("#### 🗑️ 전표 영구 삭제")
-        st.warning("경고: 삭제된 전표는 복구할 수 없습니다. 삭제 전 내용을 반드시 확인하십시오.")
         df_del = load_data("매입자료")
         if not df_del.empty:
             df_del['표시'] = "[No." + df_del.index.astype(str) + "]  " + df_del['매입일자'].astype(str) + " | " + df_del['거래처'].astype(str) + " | " + df_del['품목명'].astype(str) + " | " + df_del['총액'].astype(str) + "원"
-            del_options = df_del['표시'].tolist()[::-1]
-            target = st.selectbox("삭제할 전표 선택", del_options)
+            target = st.selectbox("삭제할 전표 선택", df_del['표시'].tolist()[::-1])
             if st.button("선택 전표 DB에서 삭제"):
                 del_idx = int(target.split("]")[0].replace("[No.", ""))
                 df_realtime = conn.read(worksheet="매입자료", ttl=0)
-                df_realtime = df_realtime.drop(index=del_idx)
-                conn.update(worksheet="매입자료", data=df_realtime)
-                st.success("해당 전표가 삭제되었습니다.")
+                conn.update(worksheet="매입자료", data=df_realtime.drop(index=del_idx))
                 st.rerun()
-        else:
-            st.info("삭제할 전표 데이터가 없습니다.")
 
 elif menu == "🏢 거래처 마스터 관리":
     st.markdown("## 🏢 거래처 마스터 관리")
     st.divider()
     tab1, tab2 = st.tabs(["➕ 거래처 신규 등록", "✏️ 거래처 정보 수정"])
-    
     df_v = load_data("거래처")
     with tab1:
         c1, c2 = st.columns(2)
@@ -200,7 +190,6 @@ elif menu == "🏢 거래처 마스터 관리":
             df = conn.read(worksheet="거래처", ttl=0)
             conn.update(worksheet="거래처", data=pd.concat([df, pd.DataFrame([{"거래처명":n, "사업자등록번호":b, "연락처1":p1, "연락처2":p2, "팩스번호":fax, "비고":rem}])], ignore_index=True))
             st.rerun()
-            
     with tab2:
         target = st.selectbox("마스터 정보를 수정할 거래처 선택", df_v['거래처명'].tolist() if not df_v.empty else [])
         if target:
@@ -215,15 +204,12 @@ elif menu == "🏢 거래처 마스터 관리":
                 for col, val in zip(['거래처명','사업자등록번호','연락처1','연락처2','팩스번호','비고'], [n,b,p1,p2,fax,rem]): df.at[idx, col] = val
                 conn.update(worksheet="거래처", data=df)
                 st.rerun()
-    st.markdown("---")
-    st.markdown("#### 📋 등록된 거래처 마스터 목록")
     st.dataframe(df_v, use_container_width=True)
 
 elif menu == "📦 품목 마스터 관리":
     st.markdown("## 📦 품목 마스터 관리")
     st.divider()
     tab1, tab2 = st.tabs(["➕ 품목 신규 등록", "✏️ 품목 정보 및 단가 수정"])
-    
     df_i, df_v = load_data("품목"), load_data("거래처")
     with tab1:
         c1, c2 = st.columns(2)
@@ -233,7 +219,6 @@ elif menu == "📦 품목 마스터 관리":
             df = conn.read(worksheet="품목", ttl=0)
             conn.update(worksheet="품목", data=pd.concat([df, pd.DataFrame([{"제품명":n, "주거래처":v, "단가":p}])], ignore_index=True))
             st.rerun()
-            
     with tab2:
         target = st.selectbox("수정할 품목 선택", df_i['제품명'].tolist() if not df_i.empty else [])
         if target:
@@ -246,44 +231,33 @@ elif menu == "📦 품목 마스터 관리":
                 df.at[idx, '주거래처'] = v; df.at[idx, '단가'] = p
                 conn.update(worksheet="품목", data=df)
                 st.rerun()
-    st.markdown("---")
-    st.markdown("#### 📋 등록된 품목 마스터 목록")
     st.dataframe(df_i, use_container_width=True)
 
 elif menu == "📈 단가 변동 이력": 
     st.markdown("## 📈 단가 변동 이력 조회")
-    st.caption("품목별 단가 변동 및 히스토리 내역을 조회합니다.")
     st.divider()
     st.dataframe(load_data("단가이력"), use_container_width=True)
 
 elif menu == "🔍 매입 원장 상세조회":
     st.markdown("## 🔍 매입 원장 상세조회")
-    st.caption("설정된 조건에 따라 전체 매입 내역을 교차 검색합니다.")
     st.divider()
-    
     df = load_data("매입자료")
     if not df.empty:
         df['매입일자'] = pd.to_datetime(df['매입일자'], errors='coerce')
-        
-        with st.container():
-            c1, c2, c3 = st.columns(3)
-            d_range = c1.date_input("조회 기간 설정", value=(date.today()-timedelta(30), date.today()))
-            v = c2.selectbox("거래처 필터", ["전체"] + df['거래처'].dropna().unique().tolist())
-            i = c3.selectbox("품목 필터", ["전체"] + df['품목명'].dropna().unique().tolist())
-            
-        st.markdown("<br>", unsafe_allow_html=True)
-        
+        c1, c2, c3 = st.columns(3)
+        d_range = c1.date_input("조회 기간 설정", value=(date.today()-timedelta(30), date.today()))
+        v = c2.selectbox("거래처 필터", ["전체"] + df['거래처'].dropna().unique().tolist())
+        i = c3.selectbox("품목 필터", ["전체"] + df['품목명'].dropna().unique().tolist())
         if v != "전체": df = df[df['거래처'] == v]
         if i != "전체": df = df[df['품목명'] == i]
         if len(d_range)==2: df = df[(df['매입일자'].dt.date >= d_range[0]) & (df['매입일자'].dt.date <= d_range[1])]
-        
         df_sorted = df.sort_values('매입일자', ascending=False)
         st.markdown(f"**총 조회 건수:** {len(df_sorted)} 건 &nbsp;&nbsp;|&nbsp;&nbsp; **총 합계 금액:** {int(df_sorted['총액'].sum()):,} 원")
         st.dataframe(df_sorted, use_container_width=True)
 
 elif menu == "🖨️ 월마감 정산서 출력":
     st.markdown("## 🖨️ 월마감 정산서 생성 및 인쇄")
-    st.caption("거래처별 월마감 내역을 확인하고 인쇄용 뷰를 생성합니다. (Ctrl+P 또는 Cmd+P를 눌러 인쇄)")
+    st.caption("인쇄(Ctrl+P) 시 불필요한 요소는 모두 사라지고 지정된 양식만 깔끔하게 출력됩니다.")
     st.divider()
     
     df = load_data("매입자료")
@@ -298,42 +272,32 @@ elif menu == "🖨️ 월마감 정산서 출력":
         if not f.empty:
             f['매입일자'] = f['매입일자'].dt.strftime('%Y-%m-%d')
             
-            # 화면 표시용 데이터
+            # [화면용 UI] 인쇄 시에는 CSS에 의해 숨겨짐
             st.dataframe(f[['매입일자', '거래처', '품목명', '수량', '단가', '총액', '비고']], use_container_width=True)
-            
             st.markdown(f"""
             <div style="background-color: #f4f5f7; padding: 20px; border-radius: 5px; text-align: right; border-left: 5px solid #0052CC;">
                 <h3 style="margin: 0; color: #172b4d;">총 정산 금액: <span style="color: #0052CC;">{int(f['총액'].sum()):,}</span> 원</h3>
             </div>
             """, unsafe_allow_html=True)
             
-            # 인쇄 전용 데이터프레임 구성 (요청하신 7개 항목)
+            # [인쇄용 UI] 데이터 가공 (요청하신 7개 항목 + 콤마 처리)
             f_print = f.copy()
             f_print.insert(0, '거래월', ym)
-            f_print.rename(columns={
-                '거래처': '거래처명',
-                '매입일자': '거래일',
-                '품목명': '품목',
-                '총액': '합계액'
-            }, inplace=True)
+            f_print.rename(columns={'거래처': '거래처명', '매입일자': '거래일', '품목명': '품목', '총액': '합계액'}, inplace=True)
+            f_print = f_print[['거래월', '거래처명', '거래일', '품목', '수량', '단가', '합계액']].fillna("")
             
-            # 지정된 순서대로 컬럼 추출
-            f_print = f_print[['거래월', '거래처명', '거래일', '품목', '수량', '단가', '합계액']]
-            
-            # 숫자 콤마 처리 및 NaN(비어있는 값) 정리
-            f_print = f_print.fillna("")
             for col in ['수량', '단가', '합계액']:
                 f_print[col] = pd.to_numeric(f_print[col], errors='coerce').fillna(0)
                 f_print[col] = f_print[col].apply(lambda x: f"{int(x):,}" if x != 0 else "")
                 
             html_table = f_print.to_html(index=False)
             
-            # 인쇄 영역 HTML (숨김 처리 후 인쇄 시에만 표시되도록 구성)
+            # [인쇄 영역] 평소엔 숨겨져 있다가 Ctrl+P 시에만 나타남
             st.markdown(f"""
             <div id='printable-area'>
                 <h2>{ym}월 {v} 정산서</h2>
                 {html_table}
-                <div style='font-size:18px; font-weight:bold; margin-top:20px; text-align:right;'>
+                <div style='font-size:11pt; font-weight:bold; margin-top:20px; text-align:right;'>
                     총 정산 합계액: {int(f['총액'].sum()):,} 원
                 </div>
             </div>
