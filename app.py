@@ -8,7 +8,7 @@ import altair as alt
 st.set_page_config(page_title="현대다이텍 통합 ERP", page_icon="🏢", layout="wide", initial_sidebar_state="expanded")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 2. ERP 스타일 커스텀 CSS 및 ★강력한 인쇄 전용 스타일 적용★
+# 2. ERP 스타일 커스텀 CSS 및 ★안전한 인쇄 전용 스타일 적용★
 st.markdown("""
     <style>
     /* 화면용 기본 스타일 */
@@ -26,32 +26,32 @@ st.markdown("""
     /* 평상시 인쇄 영역은 화면에서 숨김 */
     #printable-area { display: none; }
     
-    /* ★ 인쇄 전용 (Ctrl+P) 절대 규칙 ★ */
+    /* ★ 인쇄 전용 (Ctrl+P) 안전한 규칙 ★ */
     @media print {
-        /* 1. 화면의 모든 요소를 투명하게 처리 (잔여 UI 노출 차단) */
-        body * { visibility: hidden !important; }
+        /* 인쇄 영역 활성화 */
+        #printable-area { display: block !important; width: 100% !important; }
         
-        /* 2. 오직 인쇄 영역과 그 내부 요소만 보이게 설정 */
-        #printable-area, #printable-area * { visibility: visible !important; }
+        /* 불필요한 UI(사이드바, 상단바, 버튼, 입력창, 화면용 표) 선택적 숨김 */
+        [data-testid="stSidebar"], header, footer, [data-testid="stSelectbox"], .stButton, [data-testid="stDataFrame"] { display: none !important; }
         
-        /* 3. 인쇄 영역을 페이지 맨 위 왼쪽으로 강제 이동 */
-        #printable-area {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
-        }
+        /* 화면 전용 표시 박스 숨김 */
+        .screen-only { display: none !important; }
         
-        /* 4. 폰트 축소 및 표 디자인 (대리님 요청 반영) */
-        #printable-area table { 
-            width: 100% !important; 
-            border-collapse: collapse !important; 
-            font-size: 9pt !important; /* 폰트 작게 */
-            border: 2px solid black !important; 
-        }
-        #printable-area h2 { font-size: 14pt !important; text-align: center !important; margin-bottom: 20px !important; }
+        /* 메인 제목, 부제목, 캡션 숨김 (정산서 내부 h2 제외) */
+        div[data-testid="stMarkdownContainer"] > h1, 
+        div[data-testid="stMarkdownContainer"] > h2, 
+        div[data-testid="stMarkdownContainer"] > h3, 
+        div[data-testid="stMarkdownContainer"] > p,
+        [data-testid="stCaptionContainer"], hr { display: none !important; }
+        
+        /* 여백 제거 */
+        .block-container { padding: 0 !important; margin: 0 !important; max-width: 100% !important; }
+        
+        /* 폰트 축소 및 깔끔한 표 디자인 */
+        #printable-area table { width: 100% !important; border-collapse: collapse !important; font-size: 12px !important; border: 2px solid black !important; }
         #printable-area th, #printable-area td { border: 1px solid black !important; padding: 6px !important; color: black !important; text-align: center !important; }
-        #printable-area th { background-color: #f2f2f2 !important; font-weight: bold !important; }
+        #printable-area th { background-color: #f2f2f2 !important; font-weight: bold !important; font-size: 13px !important; }
+        #printable-area h2 { font-size: 20px !important; text-align: center !important; color: black !important; margin-bottom: 20px !important; }
     }
     </style>
 """, unsafe_allow_html=True)
@@ -272,10 +272,10 @@ elif menu == "🖨️ 월마감 정산서 출력":
         if not f.empty:
             f['매입일자'] = f['매입일자'].dt.strftime('%Y-%m-%d')
             
-            # [화면용 UI] 인쇄 시에는 CSS에 의해 숨겨짐
+            # [화면용 UI]
             st.dataframe(f[['매입일자', '거래처', '품목명', '수량', '단가', '총액', '비고']], use_container_width=True)
             st.markdown(f"""
-            <div style="background-color: #f4f5f7; padding: 20px; border-radius: 5px; text-align: right; border-left: 5px solid #0052CC;">
+            <div class="screen-only" style="background-color: #f4f5f7; padding: 20px; border-radius: 5px; text-align: right; border-left: 5px solid #0052CC;">
                 <h3 style="margin: 0; color: #172b4d;">총 정산 금액: <span style="color: #0052CC;">{int(f['총액'].sum()):,}</span> 원</h3>
             </div>
             """, unsafe_allow_html=True)
@@ -290,14 +290,14 @@ elif menu == "🖨️ 월마감 정산서 출력":
                 f_print[col] = pd.to_numeric(f_print[col], errors='coerce').fillna(0)
                 f_print[col] = f_print[col].apply(lambda x: f"{int(x):,}" if x != 0 else "")
                 
-            html_table = f_print.to_html(index=False)
+            html_table = f_print.to_html(index=False, justify='center')
             
-            # [인쇄 영역] 평소엔 숨겨져 있다가 Ctrl+P 시에만 나타남
+            # [인쇄 영역]
             st.markdown(f"""
             <div id='printable-area'>
                 <h2>{ym}월 {v} 정산서</h2>
                 {html_table}
-                <div style='font-size:11pt; font-weight:bold; margin-top:20px; text-align:right;'>
+                <div style='font-size:14px; font-weight:bold; margin-top:20px; text-align:right; color:black;'>
                     총 정산 합계액: {int(f['총액'].sum()):,} 원
                 </div>
             </div>
