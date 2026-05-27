@@ -8,7 +8,7 @@ import altair as alt
 st.set_page_config(page_title="현대다이텍 통합 ERP", page_icon="🏢", layout="wide", initial_sidebar_state="expanded")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 2. ERP 스타일 커스텀 CSS 및 ★안전한 인쇄 전용 스타일 적용★
+# 2. ERP 스타일 커스텀 CSS 및 ★다중 페이지 인쇄 최적화 스타일★
 st.markdown("""
     <style>
     /* 화면용 기본 스타일 */
@@ -16,42 +16,64 @@ st.markdown("""
     div.stButton > button:first-child { background-color: #0052CC; color: white; border-radius: 4px; font-weight: bold; border: none; padding: 0.5rem 1rem; }
     div.stButton > button:first-child:hover { background-color: #003d99; border: none; }
     div[data-testid="column"]:nth-of-type(2) div.stButton > button:first-child { background-color: #f4f5f7; color: #de350b; border: 1px solid #de350b; }
-    div[data-testid="column"]:nth-of-type(2) div.stButton > button:first-child:hover { background-color: #ffebe6; }
-
-    /* 화면용 테이블 */
-    table { width: 100% !important; border-collapse: collapse !important; font-size: 14px; }
-    th { background-color: #f4f5f7 !important; color: #172b4d !important; font-weight: 600 !important; border-bottom: 2px solid #dfe1e6 !important; padding: 10px !important; text-align: center !important; }
-    td { border-bottom: 1px solid #dfe1e6 !important; padding: 10px !important; text-align: center !important; }
     
-    /* 평상시 인쇄 영역은 화면에서 숨김 */
-    #printable-area { display: none; }
+    /* 평상시 인쇄 영역은 화면에서 완벽하게 숨김 */
+    #printable-area { display: none !important; }
     
-    /* ★ 인쇄 전용 (Ctrl+P) 안전한 규칙 ★ */
+    /* ★ 인쇄 전용 (Ctrl+P) 절대 규칙 ★ */
     @media print {
-        /* 인쇄 영역 활성화 */
-        #printable-area { display: block !important; width: 100% !important; }
+        /* 1. 스트림릿의 고정된 스크롤/높이 제한을 모두 풀어서 여러 장 출력이 가능하게 만듦 */
+        html, body, [class*="stApp"], .main, .block-container {
+            height: auto !important;
+            overflow: visible !important;
+            position: static !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            background-color: white !important;
+        }
+
+        /* 2. 화면에 보이는 모든 UI 요소 (제목, 표, 입력창, 사이드바 등) 일괄 숨김 */
+        [data-testid="stSidebar"], header, footer, [data-testid="stToolbar"] { display: none !important; }
+        [data-testid="stMarkdownContainer"], [data-testid="stSelectbox"], .stButton, [data-testid="stDataFrame"] { display: none !important; }
+        .screen-only { display: none !important; } /* 파란색 총액 박스 차단 */
+
+        /* 3. 오직 인쇄용 영역만 보이도록 설정 */
+        #printable-area { 
+            display: block !important; 
+            width: 100% !important; 
+            visibility: visible !important;
+        }
         
-        /* 불필요한 UI(사이드바, 상단바, 버튼, 입력창, 화면용 표) 선택적 숨김 */
-        [data-testid="stSidebar"], header, footer, [data-testid="stSelectbox"], .stButton, [data-testid="stDataFrame"] { display: none !important; }
+        /* 숨겨진 요소 안에서 printable-area를 강제로 화면 위로 끌어올림 */
+        #printable-area * { visibility: visible !important; }
         
-        /* 화면 전용 표시 박스 숨김 */
-        .screen-only { display: none !important; }
+        /* 4. 인쇄 폰트 축소 및 깔끔한 표 양식 */
+        #printable-area h2 { font-size: 16pt !important; text-align: center !important; margin-bottom: 20px !important; color: black !important; font-weight: bold !important; }
+        #printable-area table { 
+            width: 100% !important; 
+            border-collapse: collapse !important; 
+            font-size: 10pt !important; /* 폰트 축소 */
+            border: 2px solid black !important;
+            page-break-inside: auto !important; /* 표 중간에 페이지 넘김 허용 */
+        }
+        #printable-area tr { page-break-inside: avoid !important; page-break-after: auto !important; } /* 줄 중간에서 잘리지 않도록 보호 */
+        #printable-area thead { display: table-header-group !important; } /* 다음 장으로 넘어가도 표 머리글(항목명) 반복 출력 */
         
-        /* 메인 제목, 부제목, 캡션 숨김 (정산서 내부 h2 제외) */
-        div[data-testid="stMarkdownContainer"] > h1, 
-        div[data-testid="stMarkdownContainer"] > h2, 
-        div[data-testid="stMarkdownContainer"] > h3, 
-        div[data-testid="stMarkdownContainer"] > p,
-        [data-testid="stCaptionContainer"], hr { display: none !important; }
+        #printable-area th, #printable-area td { 
+            border: 1px solid black !important; 
+            padding: 5px !important; 
+            color: black !important; 
+            text-align: center !important; 
+        }
+        #printable-area th { background-color: #f2f2f2 !important; font-weight: bold !important; }
         
-        /* 여백 제거 */
-        .block-container { padding: 0 !important; margin: 0 !important; max-width: 100% !important; }
-        
-        /* 폰트 축소 및 깔끔한 표 디자인 */
-        #printable-area table { width: 100% !important; border-collapse: collapse !important; font-size: 12px !important; border: 2px solid black !important; }
-        #printable-area th, #printable-area td { border: 1px solid black !important; padding: 6px !important; color: black !important; text-align: center !important; }
-        #printable-area th { background-color: #f2f2f2 !important; font-weight: bold !important; font-size: 13px !important; }
-        #printable-area h2 { font-size: 20px !important; text-align: center !important; color: black !important; margin-bottom: 20px !important; }
+        #printable-area .total-sum {
+            font-size: 12pt !important;
+            font-weight: bold !important;
+            margin-top: 15px !important;
+            text-align: right !important;
+            color: black !important;
+        }
     }
     </style>
 """, unsafe_allow_html=True)
@@ -256,23 +278,24 @@ elif menu == "🔍 매입 원장 상세조회":
         st.dataframe(df_sorted, use_container_width=True)
 
 elif menu == "🖨️ 월마감 정산서 출력":
-    st.markdown("## 🖨️ 월마감 정산서 생성 및 인쇄")
-    st.caption("인쇄(Ctrl+P) 시 불필요한 요소는 모두 사라지고 지정된 양식만 깔끔하게 출력됩니다.")
-    st.divider()
+    # 화면용 제목 (인쇄 시 숨겨짐)
+    st.markdown("<div class='screen-only'><h2>🖨️ 월마감 정산서 생성 및 인쇄</h2></div>", unsafe_allow_html=True)
+    st.markdown("<div class='screen-only'><p style='color:gray;'>인쇄(Ctrl+P) 시 불필요한 요소는 모두 사라지고 지정된 양식만 여러 장에 나뉘어 깔끔하게 출력됩니다.</p><hr></div>", unsafe_allow_html=True)
     
     df = load_data("매입자료")
     if not df.empty:
         df['매입일자'] = pd.to_datetime(df['매입일자'], errors='coerce')
+        
+        # 화면용 필터 박스 (인쇄 시 숨겨짐)
         c1, c2 = st.columns(2)
         ym = c1.selectbox("마감 월 선택", sorted(df['매입일자'].dt.strftime('%Y-%m').unique().tolist(), reverse=True))
         v = c2.selectbox("정산 거래처 선택", df['거래처'].unique().tolist())
         
-        st.markdown("---")
         f = df[(df['매입일자'].dt.strftime('%Y-%m') == ym) & (df['거래처'] == v)].sort_values('매입일자')
         if not f.empty:
             f['매입일자'] = f['매입일자'].dt.strftime('%Y-%m-%d')
             
-            # [화면용 UI]
+            # [화면용 UI] 스트림릿 데이터프레임 및 파란 박스
             st.dataframe(f[['매입일자', '거래처', '품목명', '수량', '단가', '총액', '비고']], use_container_width=True)
             st.markdown(f"""
             <div class="screen-only" style="background-color: #f4f5f7; padding: 20px; border-radius: 5px; text-align: right; border-left: 5px solid #0052CC;">
@@ -280,7 +303,7 @@ elif menu == "🖨️ 월마감 정산서 출력":
             </div>
             """, unsafe_allow_html=True)
             
-            # [인쇄용 UI] 데이터 가공 (요청하신 7개 항목 + 콤마 처리)
+            # [인쇄용 UI] 데이터 가공
             f_print = f.copy()
             f_print.insert(0, '거래월', ym)
             f_print.rename(columns={'거래처': '거래처명', '매입일자': '거래일', '품목명': '품목', '총액': '합계액'}, inplace=True)
@@ -292,15 +315,17 @@ elif menu == "🖨️ 월마감 정산서 출력":
                 
             html_table = f_print.to_html(index=False, justify='center')
             
-            # [인쇄 영역]
+            # [인쇄 영역] 화면 UI들을 무시하고 맨 위로 덮어쓰는 구조
             st.markdown(f"""
             <div id='printable-area'>
                 <h2>{ym}월 {v} 정산서</h2>
                 {html_table}
-                <div style='font-size:14px; font-weight:bold; margin-top:20px; text-align:right; color:black;'>
+                <div class='total-sum'>
                     총 정산 합계액: {int(f['총액'].sum()):,} 원
                 </div>
             </div>
             """, unsafe_allow_html=True)
         else:
+            st.markdown("<div class='screen-only'>", unsafe_allow_html=True)
             st.warning("해당 조건의 정산 내역이 존재하지 않습니다.")
+            st.markdown("</div>", unsafe_allow_html=True)
