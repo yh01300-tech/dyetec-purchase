@@ -88,6 +88,27 @@ st.markdown("""
             text-align: center !important; 
         }
         #printable-area th { background-color: #f2f2f2 !important; font-weight: bold !important; }
+
+@media print {
+    /* 주의: 아래 선택자(body, html, .container 등)는 
+      실제 #printable-area를 감싸고 있는 부모 클래스나 ID로 모두 적어주셔야 합니다. 
+    */
+    html, body, #root, .app-container, .main-wrapper, #printable-area {
+        display: block !important;      /* Flex/Grid 해제 */
+        overflow: visible !important;   /* 스크롤/숨김 해제 (제일 중요) */
+        height: auto !important;        /* 고정 높이 해제 */
+        max-height: none !important;
+        position: static !important;    /* 절대 위치 해제 */
+    }
+
+    /* 여백이나 float 속성이 있다면 이것도 초기화해주는 것이 좋습니다 */
+    #printable-area {
+        float: none !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+}
         
         /* 5. 🌟 총합계 금액 인쇄 스타일 설정 (표 위에 위치) */
         #printable-area .total-sum {
