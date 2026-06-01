@@ -22,7 +22,7 @@ st.markdown("""
     
     /* ★ 인쇄 전용 (Ctrl+P) 절대 규칙 ★ */
     @media print {
-        /* 1. 스트림릿의 고정된 스크롤/높이 제한을 모두 풀어서 여러 장 출력이 가능하게 만듦 */
+        /* 1. 스트림릿의 고정된 스크롤/높이 제한 해제 */
         html, body, [class*="stApp"], .main, .block-container {
             height: auto !important;
             overflow: visible !important;
@@ -32,9 +32,13 @@ st.markdown("""
             background-color: white !important;
         }
 
-        /* 2. 화면에 보이는 모든 UI 요소 (제목, 표, 입력창, 사이드바 등) 일괄 숨김 */
+        /* 2. 화면에 보이는 모든 UI 요소 숨김 */
         [data-testid="stSidebar"], header, footer, [data-testid="stToolbar"] { display: none !important; }
-        [data-testid="stMarkdownContainer"], [data-testid="stSelectbox"], .stButton, [data-testid="stDataFrame"] { display: none !important; }
+        
+        /* 🚨 핵심 수정 부분: #printable-area를 포함하지 '않은' 마크다운 컨테이너만 숨김 */
+        [data-testid="stMarkdownContainer"]:not(:has(#printable-area)), 
+        [data-testid="stSelectbox"], .stButton, [data-testid="stDataFrame"] { display: none !important; }
+        
         .screen-only { display: none !important; } /* 파란색 총액 박스 차단 */
 
         /* 3. 오직 인쇄용 영역만 보이도록 설정 */
@@ -44,7 +48,6 @@ st.markdown("""
             visibility: visible !important;
         }
         
-        /* 숨겨진 요소 안에서 printable-area를 강제로 화면 위로 끌어올림 */
         #printable-area * { visibility: visible !important; }
         
         /* 4. 인쇄 폰트 축소 및 깔끔한 표 양식 */
@@ -52,12 +55,12 @@ st.markdown("""
         #printable-area table { 
             width: 100% !important; 
             border-collapse: collapse !important; 
-            font-size: 10pt !important; /* 폰트 축소 */
+            font-size: 10pt !important; 
             border: 2px solid black !important;
-            page-break-inside: auto !important; /* 표 중간에 페이지 넘김 허용 */
+            page-break-inside: auto !important; 
         }
-        #printable-area tr { page-break-inside: avoid !important; page-break-after: auto !important; } /* 줄 중간에서 잘리지 않도록 보호 */
-        #printable-area thead { display: table-header-group !important; } /* 다음 장으로 넘어가도 표 머리글(항목명) 반복 출력 */
+        #printable-area tr { page-break-inside: avoid !important; page-break-after: auto !important; } 
+        #printable-area thead { display: table-header-group !important; } 
         
         #printable-area th, #printable-area td { 
             border: 1px solid black !important; 
