@@ -16,7 +16,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =====================================================================
-# 3. 🖨️ 인쇄 전용 버튼 함수 정의
+# 3. 🖨️ 인쇄 전용 버튼 함수 정의 (이 함수는 그대로 둡니다)
 # =====================================================================
 def create_print_button(table_html, total_sum_html=""):
     html_code = f"""
@@ -67,59 +67,8 @@ def create_print_button(table_html, total_sum_html=""):
 
 
 # =====================================================================
-# 4. 실전! 화면 구성 및 인쇄 버튼 띄우기
+# 4. 데이터 로드 및 상태 관리
 # =====================================================================
-st.subheader("📊 데이터 조회")
-
-# (예시 데이터) DB나 구글 시트에서 가져온 데이터 리스트
-my_data = [
-    {"name": "원단 A", "qty": 100, "price": 5000},
-    {"name": "부자재 B", "qty": 200, "price": 1500},
-    {"name": "염료 C", "qty": 300, "price": 3500},
-] * 20 # 다중 페이지 출력을 확인하기 위해 데이터량을 늘림
-
-
-# 🚨 변경된 부분 1: 홈페이지 화면에는 스트림릿 전용 깔끔한 표를 보여줍니다.
-df_for_screen = pd.DataFrame(my_data)
-df_for_screen.columns = ['품목명', '수량', '단가']
-st.dataframe(df_for_screen, use_container_width=True)
-
-
-# 🚨 변경된 부분 2: 인쇄용 창에 던져줄 HTML을 안 보이게 조립합니다.
-tbody_html = ""
-total_price = 0
-
-for row in my_data:
-    tbody_html += f"""
-        <tr>
-            <td>{row['name']}</td>
-            <td>{row['qty']:,}</td>
-            <td>{row['price']:,} 원</td>
-        </tr>
-    """
-    total_price += row['qty'] * row['price']
-
-table_html_string = f"""
-    <table>
-        <thead>
-            <tr>
-                <th>품목명</th>
-                <th>수량</th>
-                <th>단가</th>
-            </tr>
-        </thead>
-        <tbody>
-            {tbody_html}
-        </tbody>
-    </table>
-"""
-
-total_sum_string = f"<div class='total-sum'>총 합계: {total_price:,} 원</div>"
-
-# 조립된 HTML을 인쇄 버튼에 쏙 넣어줍니다! (버튼 짠!)
-create_print_button(table_html=table_html_string, total_sum_html=total_sum_string)
-
-# 3. 데이터 로드 및 상태 관리
 def load_data(ws): 
     try: return conn.read(worksheet=ws, ttl=5)
     except: return pd.DataFrame()
@@ -140,7 +89,9 @@ def on_item_change():
         else: st.session_state.price_input = 0
     else: st.session_state.price_input = 0
 
-# 4. 사이드바 구성
+# =====================================================================
+# 5. 사이드바 구성
+# =====================================================================
 st.sidebar.markdown("### ⚙️ H-DYETEC ERP")
 st.sidebar.markdown("---")
 menu = st.sidebar.radio("Navigation", (
@@ -155,7 +106,9 @@ menu = st.sidebar.radio("Navigation", (
 st.sidebar.markdown("---")
 st.sidebar.caption("ⓒ 2026 Hyundai Dyetec SCM Team")
 
-# 5. 메인 화면 로직
+# =====================================================================
+# 6. 메인 화면 로직
+# =====================================================================
 if menu == "📊 경영 대시보드":
     st.markdown("## 📊 경영 대시보드")
     st.divider()
@@ -319,15 +272,13 @@ elif menu == "🔍 매입 원장 상세조회":
         st.dataframe(df_sorted, use_container_width=True)
 
 elif menu == "🖨️ 월마감 정산서 출력":
-    # 화면용 제목 (인쇄 시 숨겨짐)
-    st.markdown("<div class='screen-only'><h2>🖨️ 월마감 정산서 생성 및 인쇄</h2></div>", unsafe_allow_html=True)
-    st.markdown("<div class='screen-only'><p style='color:gray;'>인쇄(Ctrl+P) 시 불필요한 요소는 모두 사라지고 지정된 양식만 여러 장에 나뉘어 깔끔하게 출력됩니다.</p><hr></div>", unsafe_allow_html=True)
+    st.markdown("## 🖨️ 월마감 정산서 생성 및 인쇄")
+    st.divider()
     
     df = load_data("매입자료")
     if not df.empty:
         df['매입일자'] = pd.to_datetime(df['매입일자'], errors='coerce')
         
-        # 화면용 필터 박스 (인쇄 시 숨겨짐)
         c1, c2 = st.columns(2)
         ym = c1.selectbox("마감 월 선택", sorted(df['매입일자'].dt.strftime('%Y-%m').unique().tolist(), reverse=True))
         v = c2.selectbox("정산 거래처 선택", df['거래처'].unique().tolist())
@@ -336,15 +287,15 @@ elif menu == "🖨️ 월마감 정산서 출력":
         if not f.empty:
             f['매입일자'] = f['매입일자'].dt.strftime('%Y-%m-%d')
             
-            # [화면용 UI] 스트림릿 데이터프레임 및 파란 박스
+            # [화면용 UI] 스트림릿 데이터프레임 및 파란 박스 출력
             st.dataframe(f[['매입일자', '거래처', '품목명', '수량', '단가', '총액', '비고']], use_container_width=True)
             st.markdown(f"""
-            <div class="screen-only" style="background-color: #f4f5f7; padding: 20px; border-radius: 5px; text-align: right; border-left: 5px solid #0052CC;">
+            <div style="background-color: #f4f5f7; padding: 20px; border-radius: 5px; text-align: right; border-left: 5px solid #0052CC; margin-bottom: 20px;">
                 <h3 style="margin: 0; color: #172b4d;">총 정산 금액: <span style="color: #0052CC;">{int(f['총액'].sum()):,}</span> 원</h3>
             </div>
             """, unsafe_allow_html=True)
             
-            # [인쇄용 UI] 데이터 가공
+            # [인쇄용 데이터 가공] HTML 표로 변환
             f_print = f.copy()
             f_print.insert(0, '거래월', ym)
             f_print.rename(columns={'거래처': '거래처명', '매입일자': '거래일', '품목명': '품목', '총액': '합계액'}, inplace=True)
@@ -355,18 +306,10 @@ elif menu == "🖨️ 월마감 정산서 출력":
                 f_print[col] = f_print[col].apply(lambda x: f"{int(x):,}" if x != 0 else "")
                 
             html_table = f_print.to_html(index=False, justify='center')
+            total_sum_string = f"<div class='total-sum'>총 정산 합계액: {int(f['총액'].sum()):,} 원</div>"
             
-            # [인쇄 영역] 화면 UI들을 무시하고 맨 위로 덮어쓰는 구조
-            st.markdown(f"""
-            <div id='printable-area'>
-                <h2>{ym}월 {v} 정산서</h2>
-                <div class='total-sum'>
-                    총 정산 합계액: {int(f['총액'].sum()):,} 원
-                </div>
-                {html_table}
-            </div>
-            """, unsafe_allow_html=True)
+            # 🚨 드디어 핵심! 우리가 만든 파란색 인쇄 버튼을 여기에 띄웁니다!
+            create_print_button(table_html=html_table, total_sum_html=total_sum_string)
+            
         else:
-            st.markdown("<div class='screen-only'>", unsafe_allow_html=True)
             st.warning("해당 조건의 정산 내역이 존재하지 않습니다.")
-            st.markdown("</div>", unsafe_allow_html=True)
