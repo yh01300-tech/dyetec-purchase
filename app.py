@@ -91,11 +91,9 @@ st.markdown("""
         #printable-area .total-sum {
             font-size: 13pt !important;
             font-weight: bold !important;
-            margin-top: 20px !important;
+            margin-bottom: 10px !important; /* 표 위로 올라갔으므로 bottom 마진으로 변경 */
             text-align: right !important;
             color: black !important;
-            page-break-before: avoid !important; /* 표가 끝나자마자 다음 페이지로 안 밀리고 끈끈하게 붙어있도록 설정 */
-            page-break-inside: avoid !important;
         }
     }
     </style>
@@ -342,10 +340,10 @@ elif menu == "🖨️ 월마감 정산서 출력":
             st.markdown(f"""
             <div id='printable-area'>
                 <h2>{ym}월 {v} 정산서</h2>
-                {html_table}
                 <div class='total-sum'>
                     총 정산 합계액: {int(f['총액'].sum()):,} 원
                 </div>
+                {html_table}
             </div>
             """, unsafe_allow_html=True)
         else:
