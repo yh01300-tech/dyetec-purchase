@@ -26,7 +26,7 @@ st.markdown("""
        2. 인쇄 전용 (Ctrl+P) 절대 규칙 (다중 페이지 최적화)
        ========================================================= */
     @media print {
-        /* ① 스트림릿 내부 컨테이너 높이 제한 및 Flex/Grid 완벽 해제 */
+        /* 1. 스트림릿 내부 컨테이너 높이 제한 완벽 해제 */
         html, body, [class*="stApp"], .main, .block-container,
         [data-testid="stAppViewContainer"], [data-testid="stMainSpaceToUse"],
         [data-testid="stVerticalBlock"], [data-testid="stVerticalBlockBlock"], 
@@ -42,22 +42,22 @@ st.markdown("""
             background-color: white !important;
         }
 
-        /* ② #printable-area를 담고 있는 마크다운 컨테이너만 예외 처리 */
+        /* 2. #printable-area를 담고 있는 마크다운 컨테이너만 예외 처리 */
         [data-testid="stMarkdownContainer"]:has(#printable-area) {
             display: block !important;
             height: auto !important;
             overflow: visible !important;
         }
 
-        /* ③ 화면에 보이는 UI 요소 일괄 숨김 및 'Manage app' 마크 제거 */
+        /* 3. 화면에 보이는 UI 요소 일괄 숨김 및 Manage app 마크 제거 */
         [data-testid="stSidebar"], header, footer, [data-testid="stToolbar"], #manage-app-button { display: none !important; }
         
         [data-testid="stMarkdownContainer"]:not(:has(#printable-area)), 
         [data-testid="stSelectbox"], .stButton, [data-testid="stDataFrame"] { display: none !important; }
         
-        .screen-only { display: none !important; } /* 파란색 총액 박스 등 차단 */
+        .screen-only { display: none !important; }
 
-        /* ④ 오직 인쇄용 영역만 보이도록 설정 및 여백 초기화 */
+        /* 4. 오직 인쇄용 영역만 보이도록 설정 및 여백 초기화 */
         #printable-area { 
             display: block !important; 
             width: 100% !important; 
@@ -70,7 +70,7 @@ st.markdown("""
         }
         #printable-area * { visibility: visible !important; }
         
-        /* ⑤ 다중 페이지 최적화 표 양식 (헤더 반복, 줄 바꿈 방지) */
+        /* 5. 다중 페이지 최적화 표 양식 */
         #printable-area h2 { 
             font-size: 18pt !important; 
             text-align: center !important; 
@@ -90,7 +90,7 @@ st.markdown("""
             page-break-after: auto !important; 
         } 
         #printable-area thead { 
-            display: table-header-group !important; /* 2페이지 이상 항목명 반복 출력 */
+            display: table-header-group !important;
         } 
         #printable-area th, #printable-area td { 
             border: 1px solid black !important; 
