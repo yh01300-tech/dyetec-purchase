@@ -49,7 +49,8 @@ def create_print_button(table_html, total_sum_html=""):
             <body>
                 <h2>구매 내역</h2>
                 {total_sum_html}
-                {table_html} </body>
+                {table_html} 
+            </body>
             </html>
         `);
         printWindow.document.close();
@@ -66,7 +67,7 @@ def create_print_button(table_html, total_sum_html=""):
 
 
 # =====================================================================
-# 4. 실전! f-string으로 표 HTML 생성 및 인쇄
+# 4. 실전! 화면 구성 및 인쇄 버튼 띄우기
 # =====================================================================
 st.subheader("📊 데이터 조회")
 
@@ -77,7 +78,14 @@ my_data = [
     {"name": "염료 C", "qty": 300, "price": 3500},
 ] * 20 # 다중 페이지 출력을 확인하기 위해 데이터량을 늘림
 
-# 1) for문과 f-string을 활용해 <tbody> 안의 행(Row)들을 먼저 만듭니다.
+
+# 🚨 변경된 부분 1: 홈페이지 화면에는 스트림릿 전용 깔끔한 표를 보여줍니다.
+df_for_screen = pd.DataFrame(my_data)
+df_for_screen.columns = ['품목명', '수량', '단가']
+st.dataframe(df_for_screen, use_container_width=True)
+
+
+# 🚨 변경된 부분 2: 인쇄용 창에 던져줄 HTML을 안 보이게 조립합니다.
 tbody_html = ""
 total_price = 0
 
@@ -91,7 +99,6 @@ for row in my_data:
     """
     total_price += row['qty'] * row['price']
 
-# 2) 만들어진 tbody를 <table> 기본 틀 안에 쏙 넣습니다.
 table_html_string = f"""
     <table>
         <thead>
@@ -107,14 +114,10 @@ table_html_string = f"""
     </table>
 """
 
-# 3) 총합계 HTML도 f-string으로 깔끔하게 만듭니다.
 total_sum_string = f"<div class='total-sum'>총 합계: {total_price:,} 원</div>"
 
-# 4) 완성된 HTML 문자열 2개를 버튼 생성 함수에 던져줍니다!
+# 조립된 HTML을 인쇄 버튼에 쏙 넣어줍니다! (버튼 짠!)
 create_print_button(table_html=table_html_string, total_sum_html=total_sum_string)
-
-# (참고) 웹 화면용 표는 st.markdown으로 그대로 띄워주시면 됩니다.
-st.markdown(table_html_string, unsafe_allow_html=True)
 
 # 3. 데이터 로드 및 상태 관리
 def load_data(ws): 
