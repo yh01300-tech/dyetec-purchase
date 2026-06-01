@@ -69,9 +69,13 @@ def create_print_button(table_html, total_sum_html=""):
 # =====================================================================
 # 4. 데이터 로드 및 상태 관리
 # =====================================================================
+# 변경할 코드
 def load_data(ws): 
-    try: return conn.read(worksheet=ws, ttl=5)
-    except: return pd.DataFrame()
+    try: 
+        return conn.read(worksheet=ws, ttl=5)
+    except Exception as e: 
+        st.error(f"🚨 '{ws}' 시트 데이터를 불러오는 데 실패했습니다! 원인: {e}")
+        return pd.DataFrame()
 
 if 'temp_entries' not in st.session_state:
     st.session_state.temp_entries = pd.DataFrame(columns=["매입일자", "거래처", "품목명", "수량", "단가", "총액", "비고"])
