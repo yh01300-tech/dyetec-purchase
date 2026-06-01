@@ -1,114 +1,116 @@
 import streamlit as st
-import pandas as pd
-from datetime import date, timedelta
-from streamlit_gsheets import GSheetsConnection
-import altair as alt
+import streamlit.components.v1 as components
 
-# 1. 페이지 설정 및 연결
-st.set_page_config(page_title="현대다이텍 통합 ERP", page_icon="🏢", layout="wide", initial_sidebar_state="expanded")
-conn = st.connection("gsheets", type=GSheetsConnection)
+# 1. 페이지 설정
+st.set_page_config(page_title="현대다이텍 통합 ERP", page_icon="🏢", layout="wide")
 
-# 2. ERP 스타일 커스텀 CSS 및 ★스트림릿 전용 다중 페이지 강제 인쇄 최적화★
+# 2. 화면용 CSS (인쇄용 CSS는 모두 삭제)
 st.markdown("""
     <style>
-    /* =========================================================
-       1. 화면용 기본 스타일 (웹 브라우저 화면)
-       ========================================================= */
     .block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; }
-    div.stButton > button:first-child { background-color: #0052CC; color: white; border-radius: 4px; font-weight: bold; border: none; padding: 0.5rem 1rem; }
-    div.stButton > button:first-child:hover { background-color: #003d99; border: none; }
-    div[data-testid="column"]:nth-of-type(2) div.stButton > button:first-child { background-color: #f4f5f7; color: #de350b; border: 1px solid #de350b; }
-    
-    #printable-area { display: none !important; }
-
-    /* =========================================================
-       2. 인쇄 전용 (Ctrl+P) - 스트림릿 레이아웃 강제 평탄화
-       ========================================================= */
-    @media print {
-        /* 🚨 [핵심] 스트림릿의 모든 div 레이아웃 속성을 강제로 풉니다 */
-        html, body, div {
-            display: block !important;
-            overflow: visible !important;
-            height: auto !important;
-            min-height: auto !important;
-            max-height: none !important;
-            position: static !important;
-            float: none !important;
-        }
-
-        /* 불필요한 UI 완벽하게 숨기기 */
-        header, footer, [data-testid="stSidebar"], [data-testid="stToolbar"], 
-        #manage-app-button, .stButton, [data-testid="stSelectbox"] { 
-            display: none !important; 
-        }
-        
-        .screen-only { display: none !important; }
-
-        /* 인쇄 영역 보이기 및 여백 초기화 */
-        #printable-area { 
-            display: block !important; 
-            width: 100% !important; 
-            margin: 0 !important;
-            padding: 0 !important;
-            visibility: visible !important;
-        }
-        #printable-area * { visibility: visible !important; }
-        
-        /* =========================================================
-           3. 다중 페이지 표 양식 (테이블 속성 강제 복구)
-           ========================================================= */
-        #printable-area h2 { 
-            font-size: 18pt !important; 
-            text-align: center !important; 
-            margin-bottom: 15px !important; 
-            color: black !important; 
-            font-weight: bold !important; 
-        }
-        
-        /* 부모 div 속성 초기화에 영향받지 않도록 table 속성 명시적 선언 */
-        #printable-area table { 
-            display: table !important; 
-            width: 100% !important; 
-            border-collapse: collapse !important; 
-            font-size: 10pt !important; 
-            border: 2px solid black !important;
-            page-break-inside: auto !important; 
-        }
-        #printable-area thead { 
-            display: table-header-group !important; /* 헤더 반복 */
-        } 
-        #printable-area tbody { 
-            display: table-row-group !important; 
-        } 
-        #printable-area tr { 
-            display: table-row !important; 
-            page-break-inside: avoid !important; /* 행(Row) 중간 잘림 방지 */
-            page-break-after: auto !important; 
-        } 
-        #printable-area th, #printable-area td { 
-            display: table-cell !important; 
-            border: 1px solid black !important; 
-            padding: 6px 4px !important; 
-            color: black !important; 
-            text-align: center !important; 
-        }
-        #printable-area th { 
-            background-color: #f2f2f2 !important; 
-            font-weight: bold !important; 
-        }
-        
-        /* 총합계 금액 인쇄 스타일 설정 */
-        #printable-area .total-sum {
-            display: block !important;
-            font-size: 13pt !important;
-            font-weight: bold !important;
-            margin-bottom: 10px !important; 
-            text-align: right !important;
-            color: black !important;
-        }
-    }
     </style>
 """, unsafe_allow_html=True)
+
+# =====================================================================
+# 3. 🖨️ 인쇄 전용 버튼 함수 정의
+# =====================================================================
+def create_print_button(table_html, total_sum_html=""):
+    html_code = f"""
+    <button onclick="printDocument()" style="background-color: #0052CC; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%;">
+        🖨️ 다중 페이지 인쇄하기
+    </button>
+    
+    <script>
+    function printDocument() {{
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <html>
+            <head>
+                <title>구매 내역 인쇄</title>
+                <style>
+                    body {{ font-family: 'Malgun Gothic', sans-serif; padding: 20px; color: black; }}
+                    h2 {{ text-align: center; margin-bottom: 20px; }}
+                    .total-sum {{ font-size: 13pt; font-weight: bold; margin-bottom: 10px; text-align: right; }}
+                    table {{ width: 100%; border-collapse: collapse; font-size: 10pt; border: 2px solid black; }}
+                    th, td {{ border: 1px solid black; padding: 6px 4px; text-align: center; }}
+                    th {{ background-color: #f2f2f2; font-weight: bold; }}
+                    
+                    @media print {{
+                        thead {{ display: table-header-group; }} 
+                        tr {{ page-break-inside: avoid; }}       
+                        @page {{ margin: 1cm; }}                 
+                    }}
+                </style>
+            </head>
+            <body>
+                <h2>구매 내역</h2>
+                {total_sum_html}
+                {table_html} </body>
+            </html>
+        `);
+        printWindow.document.close();
+        printWindow.focus();
+        
+        setTimeout(() => {{
+            printWindow.print();
+            printWindow.close();
+        }}, 500);
+    }}
+    </script>
+    """
+    components.html(html_code, height=60)
+
+
+# =====================================================================
+# 4. 실전! f-string으로 표 HTML 생성 및 인쇄
+# =====================================================================
+st.subheader("📊 데이터 조회")
+
+# (예시 데이터) DB나 구글 시트에서 가져온 데이터 리스트
+my_data = [
+    {"name": "원단 A", "qty": 100, "price": 5000},
+    {"name": "부자재 B", "qty": 200, "price": 1500},
+    {"name": "염료 C", "qty": 300, "price": 3500},
+] * 20 # 다중 페이지 출력을 확인하기 위해 데이터량을 늘림
+
+# 1) for문과 f-string을 활용해 <tbody> 안의 행(Row)들을 먼저 만듭니다.
+tbody_html = ""
+total_price = 0
+
+for row in my_data:
+    tbody_html += f"""
+        <tr>
+            <td>{row['name']}</td>
+            <td>{row['qty']:,}</td>
+            <td>{row['price']:,} 원</td>
+        </tr>
+    """
+    total_price += row['qty'] * row['price']
+
+# 2) 만들어진 tbody를 <table> 기본 틀 안에 쏙 넣습니다.
+table_html_string = f"""
+    <table>
+        <thead>
+            <tr>
+                <th>품목명</th>
+                <th>수량</th>
+                <th>단가</th>
+            </tr>
+        </thead>
+        <tbody>
+            {tbody_html}
+        </tbody>
+    </table>
+"""
+
+# 3) 총합계 HTML도 f-string으로 깔끔하게 만듭니다.
+total_sum_string = f"<div class='total-sum'>총 합계: {total_price:,} 원</div>"
+
+# 4) 완성된 HTML 문자열 2개를 버튼 생성 함수에 던져줍니다!
+create_print_button(table_html=table_html_string, total_sum_html=total_sum_string)
+
+# (참고) 웹 화면용 표는 st.markdown으로 그대로 띄워주시면 됩니다.
+st.markdown(table_html_string, unsafe_allow_html=True)
 
 # 3. 데이터 로드 및 상태 관리
 def load_data(ws): 
