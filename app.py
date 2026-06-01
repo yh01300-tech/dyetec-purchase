@@ -22,8 +22,7 @@ st.markdown("""
     
     /* ★ 인쇄 전용 (Ctrl+P) 절대 규칙 ★ */
     @media print {
-        /* 1. 🚨 중요: 스트림릿 내부의 모든 부모/자식 컨테이너 높이 제한 및 Flex 레이아웃 완벽 해제 
-              이 설정을 해야 고정 크기 웹뷰가 풀리고 일반 문서처럼 여러 장으로 자연스럽게 흐릅니다. */
+        /* 1. 스트림릿 내부 컨테이너 높이 제한 완벽 해제 */
         html, body, [class*="stApp"], .main, .block-container,
         [data-testid="stAppViewContainer"], [data-testid="stMainSpaceToUse"],
         [data-testid="stVerticalBlock"], [data-testid="stVerticalBlockBlock"], 
@@ -33,26 +32,29 @@ st.markdown("""
             max-height: none !important;
             overflow: visible !important;
             position: static !important;
-            display: block !important; /* flex 구조를 완전 해제 */
+            display: block !important; 
             padding: 0 !important;
             margin: 0 !important;
             background-color: white !important;
         }
 
-        /* #printable-area를 담고 있는 마크다운 컨테이너만 예외적으로 화면 흐름 유지 */
+        /* #printable-area를 담고 있는 마크다운 컨테이너만 예외 처리 */
         [data-testid="stMarkdownContainer"]:has(#printable-area) {
             display: block !important;
             height: auto !important;
             overflow: visible !important;
         }
 
-        /* 2. 화면에 보이는 UI 요소 (사이드바, 버튼, 입력창 등) 일괄 숨김 */
-        [data-testid="stSidebar"], header, footer, [data-testid="stToolbar"] { display: none !important; }
+        /* 2. 화면에 보이는 UI 요소 일괄 숨김 및 🚨 'Manage app' 마크 제거 */
+        /* #manage-app-button 이 부분이 핵심 수정 사항입니다. */
+        [data-testid="stSidebar"], header, footer, [data-testid="stToolbar"], #manage-app-button { display: none !important; }
+        
         [data-testid="stMarkdownContainer"]:not(:has(#printable-area)), 
         [data-testid="stSelectbox"], .stButton, [data-testid="stDataFrame"] { display: none !important; }
+        
         .screen-only { display: none !important; } /* 파란색 총액 박스 차단 */
 
-        /* 3. 오직 인쇄용 영역만 보이도록 설정 및 강제 출력 */
+        /* 3. 오직 인쇄용 영역만 보이도록 설정 */
         #printable-area { 
             display: block !important; 
             width: 100% !important; 
@@ -63,20 +65,20 @@ st.markdown("""
         #printable-area * { visibility: visible !important; }
         
         /* 4. 다중 페이지 최적화 표 양식 */
-        #printable-area h2 { font-size: 18pt !important; text-align: center !important; margin-bottom: 25px !important; color: black !important; font-weight: bold !important; }
+        #printable-area h2 { font-size: 18pt !important; text-align: center !important; margin-bottom: 15px !important; color: black !important; font-weight: bold !important; }
         #printable-area table { 
             width: 100% !important; 
             border-collapse: collapse !important; 
             font-size: 10pt !important; 
             border: 2px solid black !important;
-            page-break-inside: auto !important; /* 데이터가 많으면 중간에 다음 페이지로 자연스럽게 넘김 */
+            page-break-inside: auto !important; 
         }
         #printable-area tr { 
-            page-break-inside: avoid !important; /* 표의 행(Row) 중간에서 글자가 가로로 쪼개져서 잘리는 현상 방지 */
+            page-break-inside: avoid !important; 
             page-break-after: auto !important; 
         } 
         #printable-area thead { 
-            display: table-header-group !important; /* 🌟 2페이지 이상 넘어가도 맨 위 항목명(거래월, 품목 등)이 매 페이지마다 반복 출력됨 */
+            display: table-header-group !important; /* 2페이지 이상 항목명 반복 출력 */
         } 
         
         #printable-area th, #printable-area td { 
@@ -87,11 +89,11 @@ st.markdown("""
         }
         #printable-area th { background-color: #f2f2f2 !important; font-weight: bold !important; }
         
-        /* 5. 🌟 총합계 금액 인쇄 스타일 설정 */
+        /* 5. 🌟 총합계 금액 인쇄 스타일 설정 (표 위에 위치) */
         #printable-area .total-sum {
             font-size: 13pt !important;
             font-weight: bold !important;
-            margin-bottom: 10px !important; /* 표 위로 올라갔으므로 bottom 마진으로 변경 */
+            margin-bottom: 10px !important; /* 표 위로 올라갔으므로 bottom 마진 */
             text-align: right !important;
             color: black !important;
         }
