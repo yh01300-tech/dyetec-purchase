@@ -22,60 +22,80 @@ st.markdown("""
     
     /* ★ 인쇄 전용 (Ctrl+P) 절대 규칙 ★ */
     @media print {
-        /* 1. 스트림릿의 고정된 스크롤/높이 제한 해제 */
-        html, body, [class*="stApp"], .main, .block-container {
+        /* 1. 🚨 중요: 스트림릿 내부의 모든 부모/자식 컨테이너 높이 제한 및 Flex 레이아웃 완벽 해제 
+              이 설정을 해야 고정 크기 웹뷰가 풀리고 일반 문서처럼 여러 장으로 자연스럽게 흐릅니다. */
+        html, body, [class*="stApp"], .main, .block-container,
+        [data-testid="stAppViewContainer"], [data-testid="stMainSpaceToUse"],
+        [data-testid="stVerticalBlock"], [data-testid="stVerticalBlockBlock"], 
+        .element-container {
             height: auto !important;
+            min-height: auto !important;
+            max-height: none !important;
             overflow: visible !important;
             position: static !important;
+            display: block !important; /* flex 구조를 완전 해제 */
             padding: 0 !important;
             margin: 0 !important;
             background-color: white !important;
         }
 
-        /* 2. 화면에 보이는 모든 UI 요소 숨김 */
+        /* #printable-area를 담고 있는 마크다운 컨테이너만 예외적으로 화면 흐름 유지 */
+        [data-testid="stMarkdownContainer"]:has(#printable-area) {
+            display: block !important;
+            height: auto !important;
+            overflow: visible !important;
+        }
+
+        /* 2. 화면에 보이는 UI 요소 (사이드바, 버튼, 입력창 등) 일괄 숨김 */
         [data-testid="stSidebar"], header, footer, [data-testid="stToolbar"] { display: none !important; }
-        
-        /* 🚨 핵심 수정 부분: #printable-area를 포함하지 '않은' 마크다운 컨테이너만 숨김 */
         [data-testid="stMarkdownContainer"]:not(:has(#printable-area)), 
         [data-testid="stSelectbox"], .stButton, [data-testid="stDataFrame"] { display: none !important; }
-        
         .screen-only { display: none !important; } /* 파란색 총액 박스 차단 */
 
-        /* 3. 오직 인쇄용 영역만 보이도록 설정 */
+        /* 3. 오직 인쇄용 영역만 보이도록 설정 및 강제 출력 */
         #printable-area { 
             display: block !important; 
             width: 100% !important; 
             visibility: visible !important;
+            height: auto !important;
+            overflow: visible !important;
         }
-        
         #printable-area * { visibility: visible !important; }
         
-        /* 4. 인쇄 폰트 축소 및 깔끔한 표 양식 */
-        #printable-area h2 { font-size: 16pt !important; text-align: center !important; margin-bottom: 20px !important; color: black !important; font-weight: bold !important; }
+        /* 4. 다중 페이지 최적화 표 양식 */
+        #printable-area h2 { font-size: 18pt !important; text-align: center !important; margin-bottom: 25px !important; color: black !important; font-weight: bold !important; }
         #printable-area table { 
             width: 100% !important; 
             border-collapse: collapse !important; 
             font-size: 10pt !important; 
             border: 2px solid black !important;
-            page-break-inside: auto !important; 
+            page-break-inside: auto !important; /* 데이터가 많으면 중간에 다음 페이지로 자연스럽게 넘김 */
         }
-        #printable-area tr { page-break-inside: avoid !important; page-break-after: auto !important; } 
-        #printable-area thead { display: table-header-group !important; } 
+        #printable-area tr { 
+            page-break-inside: avoid !important; /* 표의 행(Row) 중간에서 글자가 가로로 쪼개져서 잘리는 현상 방지 */
+            page-break-after: auto !important; 
+        } 
+        #printable-area thead { 
+            display: table-header-group !important; /* 🌟 2페이지 이상 넘어가도 맨 위 항목명(거래월, 품목 등)이 매 페이지마다 반복 출력됨 */
+        } 
         
         #printable-area th, #printable-area td { 
             border: 1px solid black !important; 
-            padding: 5px !important; 
+            padding: 6px 4px !important; 
             color: black !important; 
             text-align: center !important; 
         }
         #printable-area th { background-color: #f2f2f2 !important; font-weight: bold !important; }
         
+        /* 5. 🌟 총합계 금액 인쇄 스타일 설정 */
         #printable-area .total-sum {
-            font-size: 12pt !important;
+            font-size: 13pt !important;
             font-weight: bold !important;
-            margin-top: 15px !important;
+            margin-top: 20px !important;
             text-align: right !important;
             color: black !important;
+            page-break-before: avoid !important; /* 표가 끝나자마자 다음 페이지로 안 밀리고 끈끈하게 붙어있도록 설정 */
+            page-break-inside: avoid !important;
         }
     }
     </style>
