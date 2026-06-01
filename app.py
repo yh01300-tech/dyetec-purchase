@@ -8,6 +8,9 @@ import streamlit.components.v1 as components
 # 1. 페이지 설정
 st.set_page_config(page_title="현대다이텍 통합 ERP", page_icon="🏢", layout="wide")
 
+# 🚨 이 줄을 추가해 주세요! (구글 시트와 통신하는 'conn' 객체 생성)
+conn = st.connection("gsheets", type=GSheetsConnection)
+
 # 2. 화면용 CSS (인쇄용 CSS는 모두 삭제)
 st.markdown("""
     <style>
