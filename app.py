@@ -102,15 +102,12 @@ st.markdown("""
             background-color: #f2f2f2 !important; 
             font-weight: bold !important; 
         }
-    }
-    </style>
-""", unsafe_allow_html=True)
         
-        /* 5. 🌟 총합계 금액 인쇄 스타일 설정 (표 위에 위치) */
+        /* 6. 🌟 총합계 금액 인쇄 스타일 설정 (표 위에 위치) */
         #printable-area .total-sum {
             font-size: 13pt !important;
             font-weight: bold !important;
-            margin-bottom: 10px !important; /* 표 위로 올라갔으므로 bottom 마진 */
+            margin-bottom: 10px !important; 
             text-align: right !important;
             color: black !important;
         }
