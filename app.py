@@ -8,7 +8,7 @@ import altair as alt
 st.set_page_config(page_title="현대다이텍 통합 ERP", page_icon="🏢", layout="wide", initial_sidebar_state="expanded")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 2. ERP 스타일 커스텀 CSS 및 ★다중 페이지 인쇄 최적화 스타일★
+# 2. ERP 스타일 커스텀 CSS 및 ★스트림릿 전용 다중 페이지 강제 인쇄 최적화★
 st.markdown("""
     <style>
     /* =========================================================
@@ -19,58 +19,44 @@ st.markdown("""
     div.stButton > button:first-child:hover { background-color: #003d99; border: none; }
     div[data-testid="column"]:nth-of-type(2) div.stButton > button:first-child { background-color: #f4f5f7; color: #de350b; border: 1px solid #de350b; }
     
-    /* 평상시에는 인쇄 영역을 화면에서 완벽하게 숨김 */
     #printable-area { display: none !important; }
 
     /* =========================================================
-       2. 인쇄 전용 (Ctrl+P) 절대 규칙 (다중 페이지 최적화)
+       2. 인쇄 전용 (Ctrl+P) - 스트림릿 레이아웃 강제 평탄화
        ========================================================= */
     @media print {
-        /* 1. 스트림릿 내부 컨테이너 높이 제한 완벽 해제 */
-        html, body, [class*="stApp"], .main, .block-container,
-        [data-testid="stAppViewContainer"], [data-testid="stMainSpaceToUse"],
-        [data-testid="stVerticalBlock"], [data-testid="stVerticalBlockBlock"], 
-        .element-container, #root {
+        /* 🚨 [핵심] 스트림릿의 모든 div 레이아웃 속성을 강제로 풉니다 */
+        html, body, div {
+            display: block !important;
+            overflow: visible !important;
             height: auto !important;
             min-height: auto !important;
             max-height: none !important;
-            overflow: visible !important;
             position: static !important;
-            display: block !important; 
-            padding: 0 !important;
-            margin: 0 !important;
-            background-color: white !important;
+            float: none !important;
         }
 
-        /* 2. #printable-area를 담고 있는 마크다운 컨테이너만 예외 처리 */
-        [data-testid="stMarkdownContainer"]:has(#printable-area) {
-            display: block !important;
-            height: auto !important;
-            overflow: visible !important;
+        /* 불필요한 UI 완벽하게 숨기기 */
+        header, footer, [data-testid="stSidebar"], [data-testid="stToolbar"], 
+        #manage-app-button, .stButton, [data-testid="stSelectbox"] { 
+            display: none !important; 
         }
-
-        /* 3. 화면에 보이는 UI 요소 일괄 숨김 및 Manage app 마크 제거 */
-        [data-testid="stSidebar"], header, footer, [data-testid="stToolbar"], #manage-app-button { display: none !important; }
-        
-        [data-testid="stMarkdownContainer"]:not(:has(#printable-area)), 
-        [data-testid="stSelectbox"], .stButton, [data-testid="stDataFrame"] { display: none !important; }
         
         .screen-only { display: none !important; }
 
-        /* 4. 오직 인쇄용 영역만 보이도록 설정 및 여백 초기화 */
+        /* 인쇄 영역 보이기 및 여백 초기화 */
         #printable-area { 
             display: block !important; 
             width: 100% !important; 
-            visibility: visible !important;
-            height: auto !important;
-            overflow: visible !important;
-            float: none !important;
             margin: 0 !important;
             padding: 0 !important;
+            visibility: visible !important;
         }
         #printable-area * { visibility: visible !important; }
         
-        /* 5. 다중 페이지 최적화 표 양식 */
+        /* =========================================================
+           3. 다중 페이지 표 양식 (테이블 속성 강제 복구)
+           ========================================================= */
         #printable-area h2 { 
             font-size: 18pt !important; 
             text-align: center !important; 
@@ -78,21 +64,29 @@ st.markdown("""
             color: black !important; 
             font-weight: bold !important; 
         }
+        
+        /* 부모 div 속성 초기화에 영향받지 않도록 table 속성 명시적 선언 */
         #printable-area table { 
+            display: table !important; 
             width: 100% !important; 
             border-collapse: collapse !important; 
             font-size: 10pt !important; 
             border: 2px solid black !important;
             page-break-inside: auto !important; 
         }
+        #printable-area thead { 
+            display: table-header-group !important; /* 헤더 반복 */
+        } 
+        #printable-area tbody { 
+            display: table-row-group !important; 
+        } 
         #printable-area tr { 
-            page-break-inside: avoid !important; 
+            display: table-row !important; 
+            page-break-inside: avoid !important; /* 행(Row) 중간 잘림 방지 */
             page-break-after: auto !important; 
         } 
-        #printable-area thead { 
-            display: table-header-group !important;
-        } 
         #printable-area th, #printable-area td { 
+            display: table-cell !important; 
             border: 1px solid black !important; 
             padding: 6px 4px !important; 
             color: black !important; 
@@ -103,8 +97,9 @@ st.markdown("""
             font-weight: bold !important; 
         }
         
-        /* 6. 🌟 총합계 금액 인쇄 스타일 설정 (표 위에 위치) */
+        /* 총합계 금액 인쇄 스타일 설정 */
         #printable-area .total-sum {
+            display: block !important;
             font-size: 13pt !important;
             font-weight: bold !important;
             margin-bottom: 10px !important; 
