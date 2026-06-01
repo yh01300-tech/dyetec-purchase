@@ -11,22 +11,26 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 # 2. ERP 스타일 커스텀 CSS 및 ★다중 페이지 인쇄 최적화 스타일★
 st.markdown("""
     <style>
-    /* 화면용 기본 스타일 */
+    /* =========================================================
+       1. 화면용 기본 스타일 (웹 브라우저 화면)
+       ========================================================= */
     .block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; }
     div.stButton > button:first-child { background-color: #0052CC; color: white; border-radius: 4px; font-weight: bold; border: none; padding: 0.5rem 1rem; }
     div.stButton > button:first-child:hover { background-color: #003d99; border: none; }
     div[data-testid="column"]:nth-of-type(2) div.stButton > button:first-child { background-color: #f4f5f7; color: #de350b; border: 1px solid #de350b; }
     
-    /* 평상시 인쇄 영역은 화면에서 완벽하게 숨김 */
+    /* 평상시에는 인쇄 영역을 화면에서 완벽하게 숨김 */
     #printable-area { display: none !important; }
-    
-    /* ★ 인쇄 전용 (Ctrl+P) 절대 규칙 ★ */
+
+    /* =========================================================
+       2. 인쇄 전용 (Ctrl+P) 절대 규칙 (다중 페이지 최적화)
+       ========================================================= */
     @media print {
-        /* 1. 스트림릿 내부 컨테이너 높이 제한 완벽 해제 */
+        /* ① 스트림릿 내부 컨테이너 높이 제한 및 Flex/Grid 완벽 해제 */
         html, body, [class*="stApp"], .main, .block-container,
         [data-testid="stAppViewContainer"], [data-testid="stMainSpaceToUse"],
         [data-testid="stVerticalBlock"], [data-testid="stVerticalBlockBlock"], 
-        .element-container {
+        .element-container, #root {
             height: auto !important;
             min-height: auto !important;
             max-height: none !important;
@@ -38,34 +42,42 @@ st.markdown("""
             background-color: white !important;
         }
 
-        /* #printable-area를 담고 있는 마크다운 컨테이너만 예외 처리 */
+        /* ② #printable-area를 담고 있는 마크다운 컨테이너만 예외 처리 */
         [data-testid="stMarkdownContainer"]:has(#printable-area) {
             display: block !important;
             height: auto !important;
             overflow: visible !important;
         }
 
-        /* 2. 화면에 보이는 UI 요소 일괄 숨김 및 🚨 'Manage app' 마크 제거 */
-        /* #manage-app-button 이 부분이 핵심 수정 사항입니다. */
+        /* ③ 화면에 보이는 UI 요소 일괄 숨김 및 'Manage app' 마크 제거 */
         [data-testid="stSidebar"], header, footer, [data-testid="stToolbar"], #manage-app-button { display: none !important; }
         
         [data-testid="stMarkdownContainer"]:not(:has(#printable-area)), 
         [data-testid="stSelectbox"], .stButton, [data-testid="stDataFrame"] { display: none !important; }
         
-        .screen-only { display: none !important; } /* 파란색 총액 박스 차단 */
+        .screen-only { display: none !important; } /* 파란색 총액 박스 등 차단 */
 
-        /* 3. 오직 인쇄용 영역만 보이도록 설정 */
+        /* ④ 오직 인쇄용 영역만 보이도록 설정 및 여백 초기화 */
         #printable-area { 
             display: block !important; 
             width: 100% !important; 
             visibility: visible !important;
             height: auto !important;
             overflow: visible !important;
+            float: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
         }
         #printable-area * { visibility: visible !important; }
         
-        /* 4. 다중 페이지 최적화 표 양식 */
-        #printable-area h2 { font-size: 18pt !important; text-align: center !important; margin-bottom: 15px !important; color: black !important; font-weight: bold !important; }
+        /* ⑤ 다중 페이지 최적화 표 양식 (헤더 반복, 줄 바꿈 방지) */
+        #printable-area h2 { 
+            font-size: 18pt !important; 
+            text-align: center !important; 
+            margin-bottom: 15px !important; 
+            color: black !important; 
+            font-weight: bold !important; 
+        }
         #printable-area table { 
             width: 100% !important; 
             border-collapse: collapse !important; 
@@ -80,72 +92,19 @@ st.markdown("""
         #printable-area thead { 
             display: table-header-group !important; /* 2페이지 이상 항목명 반복 출력 */
         } 
-        
         #printable-area th, #printable-area td { 
             border: 1px solid black !important; 
             padding: 6px 4px !important; 
             color: black !important; 
             text-align: center !important; 
         }
-        #printable-area th { background-color: #f2f2f2 !important; font-weight: bold !important; }
-
-@media print {
-    /* 1. 상위 부모 요소들의 방해 속성 초기화 (제일 중요) */
-    /* 주의: html, body 외의 선택자들은 실제 본인의 HTML 구조에 맞게 변경해야 합니다. */
-    html, body, #root, .app-container, .main-wrapper, #printable-area {
-        display: block !important;      /* Flex/Grid 해제 */
-        overflow: visible !important;   /* 스크롤/숨김 해제 */
-        height: auto !important;        /* 고정 높이 해제 */
-        max-height: none !important;
-        position: static !important;    /* 절대 위치 해제 */
+        #printable-area th { 
+            background-color: #f2f2f2 !important; 
+            font-weight: bold !important; 
+        }
     }
-
-    /* 2. 인쇄 영역 기본 여백 초기화 */
-    #printable-area {
-        float: none !important;
-        width: 100% !important;
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-
-    /* 3. 다중 페이지 표 최적화 양식 */
-    #printable-area h2 { 
-        font-size: 18pt !important; 
-        text-align: center !important; 
-        margin-bottom: 15px !important; 
-        color: black !important; 
-        font-weight: bold !important; 
-    }
-    
-    #printable-area table { 
-        width: 100% !important; 
-        border-collapse: collapse !important; 
-        font-size: 10pt !important; 
-        border: 2px solid black !important;
-        page-break-inside: auto !important; 
-    }
-    
-    #printable-area tr { 
-        page-break-inside: avoid !important; 
-        page-break-after: auto !important; 
-    } 
-    
-    #printable-area thead { 
-        display: table-header-group !important; /* 2페이지 이상 항목명 반복 출력 */
-    } 
-    
-    #printable-area th, #printable-area td { 
-        border: 1px solid black !important; 
-        padding: 6px 4px !important; 
-        color: black !important; 
-        text-align: center !important; 
-    }
-    
-    #printable-area th { 
-        background-color: #f2f2f2 !important; 
-        font-weight: bold !important; 
-    }
-}
+    </style>
+""", unsafe_allow_html=True)
         
         /* 5. 🌟 총합계 금액 인쇄 스타일 설정 (표 위에 위치) */
         #printable-area .total-sum {
