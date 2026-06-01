@@ -90,23 +90,60 @@ st.markdown("""
         #printable-area th { background-color: #f2f2f2 !important; font-weight: bold !important; }
 
 @media print {
-    /* 주의: 아래 선택자(body, html, .container 등)는 
-      실제 #printable-area를 감싸고 있는 부모 클래스나 ID로 모두 적어주셔야 합니다. 
-    */
+    /* 1. 상위 부모 요소들의 방해 속성 초기화 (제일 중요) */
+    /* 주의: html, body 외의 선택자들은 실제 본인의 HTML 구조에 맞게 변경해야 합니다. */
     html, body, #root, .app-container, .main-wrapper, #printable-area {
         display: block !important;      /* Flex/Grid 해제 */
-        overflow: visible !important;   /* 스크롤/숨김 해제 (제일 중요) */
+        overflow: visible !important;   /* 스크롤/숨김 해제 */
         height: auto !important;        /* 고정 높이 해제 */
         max-height: none !important;
         position: static !important;    /* 절대 위치 해제 */
     }
 
-    /* 여백이나 float 속성이 있다면 이것도 초기화해주는 것이 좋습니다 */
+    /* 2. 인쇄 영역 기본 여백 초기화 */
     #printable-area {
         float: none !important;
         width: 100% !important;
         margin: 0 !important;
         padding: 0 !important;
+    }
+
+    /* 3. 다중 페이지 표 최적화 양식 */
+    #printable-area h2 { 
+        font-size: 18pt !important; 
+        text-align: center !important; 
+        margin-bottom: 15px !important; 
+        color: black !important; 
+        font-weight: bold !important; 
+    }
+    
+    #printable-area table { 
+        width: 100% !important; 
+        border-collapse: collapse !important; 
+        font-size: 10pt !important; 
+        border: 2px solid black !important;
+        page-break-inside: auto !important; 
+    }
+    
+    #printable-area tr { 
+        page-break-inside: avoid !important; 
+        page-break-after: auto !important; 
+    } 
+    
+    #printable-area thead { 
+        display: table-header-group !important; /* 2페이지 이상 항목명 반복 출력 */
+    } 
+    
+    #printable-area th, #printable-area td { 
+        border: 1px solid black !important; 
+        padding: 6px 4px !important; 
+        color: black !important; 
+        text-align: center !important; 
+    }
+    
+    #printable-area th { 
+        background-color: #f2f2f2 !important; 
+        font-weight: bold !important; 
     }
 }
         
