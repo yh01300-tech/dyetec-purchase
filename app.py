@@ -247,13 +247,32 @@ elif menu == "📦 품목 마스터 관리":
         if target:
             row = df_i[df_i['제품명']==target].iloc[0]
             v = st.selectbox("주 거래처 변경", df_v['거래처명'].tolist(), index=df_v['거래처명'].tolist().index(row['주거래처']) if row['주거래처'] in df_v['거래처명'].tolist() else 0)
-            p = st.number_input("단가 변경 (원)", value=int(float(str(row['단가']).replace(',',''))))
+            
+            # 기존 단가를 변수로 미리 저장해 둡니다.
+            old_price = int(float(str(row['단가']).replace(',','')))
+            p = st.number_input("단가 변경 (원)", value=old_price)
+            
             if st.button("품목 정보 업데이트"):
+                # 1. 기존 로직: '품목' 시트 업데이트
                 df = conn.read(worksheet="품목", ttl=0)
                 idx = df.index[df['제품명'] == target][0]
                 df.at[idx, '주거래처'] = v; df.at[idx, '단가'] = p
                 conn.update(worksheet="품목", data=df)
+                
+                # 2. 🚨 추가된 로직: 단가가 실제로 변경되었을 때만 '단가이력' 시트에 기록 추가
+                if p != old_price:
+                    df_hist = conn.read(worksheet="단가이력", ttl=0)
+                    new_hist = pd.DataFrame([{
+                        "변경일자": date.today().strftime("%Y-%m-%d"),
+                        "품목명": target,
+                        "이전단가": old_price,
+                        "변경단가": p
+                    }])
+                    # 기존 이력 데이터에 새 이력 행(Row)을 병합하여 구글 시트 업데이트
+                    conn.update(worksheet="단가이력", data=pd.concat([df_hist, new_hist], ignore_index=True))
+
                 st.rerun()
+                
     st.dataframe(df_i, use_container_width=True)
 
 elif menu == "📈 단가 변동 이력": 
