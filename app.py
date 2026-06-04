@@ -4,29 +4,25 @@ from datetime import date, timedelta
 from streamlit_gsheets import GSheetsConnection
 import altair as alt
 import streamlit.components.v1 as components
+import time  # 🚨 서버 통신 속도 제어를 위해 추가됨
 
 # 1. 페이지 설정
 st.set_page_config(page_title="현대다이텍 통합 ERP", page_icon="🏢", layout="wide")
-
-# 🚨 이 줄을 추가해 주세요! (구글 시트와 통신하는 'conn' 객체 생성)
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 2. 화면용 CSS (인쇄용 CSS는 모두 삭제)
+# 2. 화면용 CSS
 st.markdown("""
     <style>
     .block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; }
     </style>
 """, unsafe_allow_html=True)
 
-# =====================================================================
-# 3. 🖨️ 인쇄 전용 버튼 함수 정의 (이 함수는 그대로 둡니다)
-# =====================================================================
+# 3. 🖨️ 인쇄 전용 버튼 함수 정의
 def create_print_button(table_html, total_sum_html=""):
     html_code = f"""
     <button onclick="printDocument()" style="background-color: #0052CC; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%;">
         🖨️ 다중 페이지 인쇄하기
     </button>
-    
     <script>
     function printDocument() {{
         const printWindow = window.open('', '_blank');
@@ -41,7 +37,6 @@ def create_print_button(table_html, total_sum_html=""):
                     table {{ width: 100%; border-collapse: collapse; font-size: 10pt; border: 2px solid black; }}
                     th, td {{ border: 1px solid black; padding: 6px 4px; text-align: center; }}
                     th {{ background-color: #f2f2f2; font-weight: bold; }}
-                    
                     @media print {{
                         thead {{ display: table-header-group; }} 
                         tr {{ page-break-inside: avoid; }}       
@@ -58,7 +53,6 @@ def create_print_button(table_html, total_sum_html=""):
         `);
         printWindow.document.close();
         printWindow.focus();
-        
         setTimeout(() => {{
             printWindow.print();
             printWindow.close();
@@ -68,11 +62,7 @@ def create_print_button(table_html, total_sum_html=""):
     """
     components.html(html_code, height=60)
 
-
-# =====================================================================
 # 4. 데이터 로드 및 상태 관리
-# =====================================================================
-# 변경할 코드
 def load_data(ws): 
     try: 
         return conn.read(worksheet=ws, ttl=5)
@@ -82,7 +72,8 @@ def load_data(ws):
 
 if 'temp_entries' not in st.session_state:
     st.session_state.temp_entries = pd.DataFrame(columns=["매입일자", "거래처", "품목명", "수량", "단가", "총액", "비고"])
-if 'price_input' not in st.session_state: st.session_state.price_input = 0
+if 'price_input' not in st.session_state: 
+    st.session_state.price_input = 0
 
 def on_item_change():
     item = st.session_state.get('item_select')
@@ -96,9 +87,7 @@ def on_item_change():
         else: st.session_state.price_input = 0
     else: st.session_state.price_input = 0
 
-# =====================================================================
 # 5. 사이드바 구성
-# =====================================================================
 st.sidebar.markdown("### ⚙️ H-DYETEC ERP")
 st.sidebar.markdown("---")
 menu = st.sidebar.radio("Navigation", (
@@ -113,9 +102,7 @@ menu = st.sidebar.radio("Navigation", (
 st.sidebar.markdown("---")
 st.sidebar.caption("ⓒ 2026 Hyundai Dyetec SCM Team")
 
-# =====================================================================
 # 6. 메인 화면 로직
-# =====================================================================
 if menu == "📊 경영 대시보드":
     st.markdown("## 📊 경영 대시보드")
     st.divider()
@@ -174,10 +161,16 @@ elif menu == "📝 매입 전표 입력":
             col_a, col_b = st.columns(2)
             with col_a:
                 if st.button("🚀 서버로 일괄 전송"):
-                    df = conn.read(worksheet="매입자료", ttl=0)
-                    conn.update(worksheet="매입자료", data=pd.concat([df, st.session_state.temp_entries], ignore_index=True))
-                    st.session_state.temp_entries = pd.DataFrame(columns=["매입일자", "거래처", "품목명", "수량", "단가", "총액", "비고"])
-                    st.rerun()
+                    with st.spinner("구글 시트에 데이터를 안전하게 저장하고 있습니다..."):
+                        try:
+                            df = conn.read(worksheet="매입자료", ttl=0)
+                            conn.update(worksheet="매입자료", data=pd.concat([df, st.session_state.temp_entries], ignore_index=True))
+                            st.session_state.temp_entries = pd.DataFrame(columns=["매입일자", "거래처", "품목명", "수량", "단가", "총액", "비고"])
+                            st.success("✅ 서버 전송 완료!")
+                            time.sleep(1)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"🚨 저장 중 통신 오류가 발생했습니다: {e}")
             with col_b:
                 if st.button("초기화 (대기열 비우기)"):
                     st.session_state.temp_entries = pd.DataFrame(columns=["매입일자", "거래처", "품목명", "수량", "단가", "총액", "비고"])
@@ -194,39 +187,63 @@ elif menu == "📝 매입 전표 입력":
             df_del['표시'] = "[No." + df_del.index.astype(str) + "]  " + df_del['매입일자'].astype(str) + " | " + df_del['거래처'].astype(str) + " | " + df_del['품목명'].astype(str) + " | " + df_del['총액'].astype(str) + "원"
             target = st.selectbox("삭제할 전표 선택", df_del['표시'].tolist()[::-1])
             if st.button("선택 전표 DB에서 삭제"):
-                del_idx = int(target.split("]")[0].replace("[No.", ""))
-                df_realtime = conn.read(worksheet="매입자료", ttl=0)
-                conn.update(worksheet="매입자료", data=df_realtime.drop(index=del_idx))
-                st.rerun()
+                with st.spinner("해당 전표를 삭제하고 있습니다..."):
+                    try:
+                        del_idx = int(target.split("]")[0].replace("[No.", ""))
+                        df_realtime = conn.read(worksheet="매입자료", ttl=0)
+                        conn.update(worksheet="매입자료", data=df_realtime.drop(index=del_idx))
+                        st.success("✅ 삭제 완료!")
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"🚨 삭제 중 통신 오류가 발생했습니다: {e}")
 
 elif menu == "🏢 거래처 마스터 관리":
     st.markdown("## 🏢 거래처 마스터 관리")
     st.divider()
     tab1, tab2 = st.tabs(["➕ 거래처 신규 등록", "✏️ 거래처 정보 수정"])
     df_v = load_data("거래처")
+    
     with tab1:
-        c1, c2 = st.columns(2)
-        n = c1.text_input("거래처명 (상호)"); b = c1.text_input("사업자등록번호")
-        p1 = c1.text_input("연락처 1"); p2 = c2.text_input("연락처 2 (담당자 등)")
-        fax = c2.text_input("팩스번호"); rem = c2.text_input("적요 (비고)")
-        if st.button("저장 (신규 등록)"):
-            df = conn.read(worksheet="거래처", ttl=0)
-            conn.update(worksheet="거래처", data=pd.concat([df, pd.DataFrame([{"거래처명":n, "사업자등록번호":b, "연락처1":p1, "연락처2":p2, "팩스번호":fax, "비고":rem}])], ignore_index=True))
-            st.rerun()
+        with st.form(key="new_vendor_form"):
+            c1, c2 = st.columns(2)
+            n = c1.text_input("거래처명 (상호)"); b = c1.text_input("사업자등록번호")
+            p1 = c1.text_input("연락처 1"); p2 = c2.text_input("연락처 2 (담당자 등)")
+            fax = c2.text_input("팩스번호"); rem = c2.text_input("적요 (비고)")
+            
+            if st.form_submit_button("저장 (신규 등록)"):
+                with st.spinner("신규 거래처를 등록하고 있습니다..."):
+                    try:
+                        df = conn.read(worksheet="거래처", ttl=0)
+                        conn.update(worksheet="거래처", data=pd.concat([df, pd.DataFrame([{"거래처명":n, "사업자등록번호":b, "연락처1":p1, "연락처2":p2, "팩스번호":fax, "비고":rem}])], ignore_index=True))
+                        st.success("✅ 등록 완료!")
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"🚨 통신 오류: {e}")
+
     with tab2:
         target = st.selectbox("마스터 정보를 수정할 거래처 선택", df_v['거래처명'].tolist() if not df_v.empty else [])
         if target:
             row = df_v[df_v['거래처명'] == target].iloc[0]
-            c1, c2 = st.columns(2)
-            n = c1.text_input("거래처명 (수정)", value=row['거래처명']); b = c1.text_input("사업자번호 (수정)", value=row['사업자등록번호'])
-            p1 = c1.text_input("연락처1 (수정)", value=row['연락처1']); p2 = c2.text_input("연락처2 (수정)", value=row['연락처2'])
-            fax = c2.text_input("팩스 (수정)", value=row['팩스번호']); rem = c2.text_input("비고 (수정)", value=row['비고'])
-            if st.button("업데이트 (수정 완료)"):
-                df = conn.read(worksheet="거래처", ttl=0)
-                idx = df.index[df['거래처명'] == target][0]
-                for col, val in zip(['거래처명','사업자등록번호','연락처1','연락처2','팩스번호','비고'], [n,b,p1,p2,fax,rem]): df.at[idx, col] = val
-                conn.update(worksheet="거래처", data=df)
-                st.rerun()
+            with st.form(key="edit_vendor_form"):
+                c1, c2 = st.columns(2)
+                n = c1.text_input("거래처명 (수정)", value=row['거래처명']); b = c1.text_input("사업자번호 (수정)", value=row['사업자등록번호'])
+                p1 = c1.text_input("연락처1 (수정)", value=row['연락처1']); p2 = c2.text_input("연락처2 (수정)", value=row['연락처2'])
+                fax = c2.text_input("팩스 (수정)", value=row['팩스번호']); rem = c2.text_input("비고 (수정)", value=row['비고'])
+                
+                if st.form_submit_button("업데이트 (수정 완료)"):
+                    with st.spinner("거래처 정보를 업데이트하고 있습니다..."):
+                        try:
+                            df = conn.read(worksheet="거래처", ttl=0)
+                            idx = df.index[df['거래처명'] == target][0]
+                            for col, val in zip(['거래처명','사업자등록번호','연락처1','연락처2','팩스번호','비고'], [n,b,p1,p2,fax,rem]): df.at[idx, col] = val
+                            conn.update(worksheet="거래처", data=df)
+                            st.success("✅ 업데이트 완료!")
+                            time.sleep(1)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"🚨 통신 오류: {e}")
     st.dataframe(df_v, use_container_width=True)
 
 elif menu == "📦 품목 마스터 관리":
@@ -234,45 +251,57 @@ elif menu == "📦 품목 마스터 관리":
     st.divider()
     tab1, tab2 = st.tabs(["➕ 품목 신규 등록", "✏️ 품목 정보 및 단가 수정"])
     df_i, df_v = load_data("품목"), load_data("거래처")
+    
     with tab1:
-        c1, c2 = st.columns(2)
-        n = c1.text_input("신규 품목명"); v = c2.selectbox("주 거래처 매핑", df_v['거래처명'].tolist() if not df_v.empty else [])
-        p = st.number_input("기준 단가 설정 (원)", 0)
-        if st.button("품목 마스터 저장"):
-            df = conn.read(worksheet="품목", ttl=0)
-            conn.update(worksheet="품목", data=pd.concat([df, pd.DataFrame([{"제품명":n, "주거래처":v, "단가":p}])], ignore_index=True))
-            st.rerun()
+        with st.form(key="new_item_form"):
+            c1, c2 = st.columns(2)
+            n = c1.text_input("신규 품목명"); v = c2.selectbox("주 거래처 매핑", df_v['거래처명'].tolist() if not df_v.empty else [])
+            p = st.number_input("기준 단가 설정 (원)", 0)
+            
+            if st.form_submit_button("품목 마스터 저장"):
+                with st.spinner("신규 품목을 등록하고 있습니다..."):
+                    try:
+                        df = conn.read(worksheet="품목", ttl=0)
+                        conn.update(worksheet="품목", data=pd.concat([df, pd.DataFrame([{"제품명":n, "주거래처":v, "단가":p}])], ignore_index=True))
+                        st.success("✅ 등록 완료!")
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"🚨 통신 오류: {e}")
+
     with tab2:
         target = st.selectbox("수정할 품목 선택", df_i['제품명'].tolist() if not df_i.empty else [])
         if target:
             row = df_i[df_i['제품명']==target].iloc[0]
-            v = st.selectbox("주 거래처 변경", df_v['거래처명'].tolist(), index=df_v['거래처명'].tolist().index(row['주거래처']) if row['주거래처'] in df_v['거래처명'].tolist() else 0)
-            
-            # 기존 단가를 변수로 미리 저장해 둡니다.
             old_price = int(float(str(row['단가']).replace(',','')))
-            p = st.number_input("단가 변경 (원)", value=old_price)
             
-            if st.button("품목 정보 업데이트"):
-                # 1. 기존 로직: '품목' 시트 업데이트
-                df = conn.read(worksheet="품목", ttl=0)
-                idx = df.index[df['제품명'] == target][0]
-                df.at[idx, '주거래처'] = v; df.at[idx, '단가'] = p
-                conn.update(worksheet="품목", data=df)
+            with st.form(key="item_update_form"):
+                v = st.selectbox("주 거래처 변경", df_v['거래처명'].tolist(), index=df_v['거래처명'].tolist().index(row['주거래처']) if row['주거래처'] in df_v['거래처명'].tolist() else 0)
+                p = st.number_input("단가 변경 (원)", value=old_price)
                 
-                # 2. 🚨 추가된 로직: 단가가 실제로 변경되었을 때만 '단가이력' 시트에 기록 추가
-                if p != old_price:
-                    df_hist = conn.read(worksheet="단가이력", ttl=0)
-                    new_hist = pd.DataFrame([{
-                        "변경일자": date.today().strftime("%Y-%m-%d"),
-                        "품목명": target,
-                        "이전단가": old_price,
-                        "변경단가": p
-                    }])
-                    # 기존 이력 데이터에 새 이력 행(Row)을 병합하여 구글 시트 업데이트
-                    conn.update(worksheet="단가이력", data=pd.concat([df_hist, new_hist], ignore_index=True))
-
-                st.rerun()
-                
+                if st.form_submit_button("품목 정보 업데이트"):
+                    with st.spinner("구글 서버에 안전하게 데이터를 저장 중입니다. 잠시만 기다려주세요..."):
+                        try:
+                            df = conn.read(worksheet="품목", ttl=0)
+                            idx = df.index[df['제품명'] == target][0]
+                            df.at[idx, '주거래처'] = v; df.at[idx, '단가'] = p
+                            conn.update(worksheet="품목", data=df)
+                            
+                            if p != old_price:
+                                df_hist = conn.read(worksheet="단가이력", ttl=0)
+                                new_hist = pd.DataFrame([{
+                                    "변경일자": date.today().strftime("%Y-%m-%d"),
+                                    "품목명": target,
+                                    "이전단가": old_price,
+                                    "변경단가": p
+                                }])
+                                conn.update(worksheet="단가이력", data=pd.concat([df_hist, new_hist], ignore_index=True))
+                            
+                            st.success("✅ 업데이트 완료!")
+                            time.sleep(1.5)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"🚨 통신 오류: {e}")
     st.dataframe(df_i, use_container_width=True)
 
 elif menu == "📈 단가 변동 이력": 
@@ -313,7 +342,6 @@ elif menu == "🖨️ 월마감 정산서 출력":
         if not f.empty:
             f['매입일자'] = f['매입일자'].dt.strftime('%Y-%m-%d')
             
-            # [화면용 UI] 스트림릿 데이터프레임 및 파란 박스 출력
             st.dataframe(f[['매입일자', '거래처', '품목명', '수량', '단가', '총액', '비고']], use_container_width=True)
             st.markdown(f"""
             <div style="background-color: #f4f5f7; padding: 20px; border-radius: 5px; text-align: right; border-left: 5px solid #0052CC; margin-bottom: 20px;">
@@ -321,7 +349,6 @@ elif menu == "🖨️ 월마감 정산서 출력":
             </div>
             """, unsafe_allow_html=True)
             
-            # [인쇄용 데이터 가공] HTML 표로 변환
             f_print = f.copy()
             f_print.insert(0, '거래월', ym)
             f_print.rename(columns={'거래처': '거래처명', '매입일자': '거래일', '품목명': '품목', '총액': '합계액'}, inplace=True)
@@ -334,7 +361,6 @@ elif menu == "🖨️ 월마감 정산서 출력":
             html_table = f_print.to_html(index=False, justify='center')
             total_sum_string = f"<div class='total-sum'>총 정산 합계액: {int(f['총액'].sum()):,} 원</div>"
             
-            # 🚨 드디어 핵심! 우리가 만든 파란색 인쇄 버튼을 여기에 띄웁니다!
             create_print_button(table_html=html_table, total_sum_html=total_sum_string)
             
         else:
