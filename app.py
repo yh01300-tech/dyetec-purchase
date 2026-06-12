@@ -65,7 +65,8 @@ def create_print_button(table_html, total_sum_html=""):
 # 4. 데이터 로드 및 상태 관리
 def load_data(ws): 
     try: 
-        return conn.read(worksheet=ws, ttl=5)
+        # 🚨 [업그레이드] ttl을 600초(10분)로 늘려 과도한 API 호출 및 속도 저하 방지
+        return conn.read(worksheet=ws, ttl=600)
     except Exception as e: 
         st.error(f"🚨 '{ws}' 시트 데이터를 불러오는 데 실패했습니다! 원인: {e}")
         return pd.DataFrame()
@@ -101,6 +102,11 @@ menu = st.sidebar.radio("Navigation", (
 ))
 st.sidebar.markdown("---")
 st.sidebar.caption("ⓒ 2026 Hyundai Dyetec SCM Team")
+
+# 🚨 [업그레이드] 사이드바에 수동 새로고침 버튼 추가 (캐시 강제 초기화)
+if st.sidebar.button("🔄 최신 데이터 새로고침"):
+    st.cache_data.clear()
+    st.rerun()
 
 # 6. 메인 화면 로직
 if menu == "📊 경영 대시보드":
@@ -165,6 +171,10 @@ elif menu == "📝 매입 전표 입력":
                         try:
                             df = conn.read(worksheet="매입자료", ttl=0)
                             conn.update(worksheet="매입자료", data=pd.concat([df, st.session_state.temp_entries], ignore_index=True))
+                            
+                            # 🚨 [업그레이드] 업데이트 후 캐시 비우기
+                            st.cache_data.clear()
+                            
                             st.session_state.temp_entries = pd.DataFrame(columns=["매입일자", "거래처", "품목명", "수량", "단가", "총액", "비고"])
                             st.success("✅ 서버 전송 완료!")
                             time.sleep(1)
@@ -192,6 +202,10 @@ elif menu == "📝 매입 전표 입력":
                         del_idx = int(target.split("]")[0].replace("[No.", ""))
                         df_realtime = conn.read(worksheet="매입자료", ttl=0)
                         conn.update(worksheet="매입자료", data=df_realtime.drop(index=del_idx))
+                        
+                        # 🚨 [업그레이드] 업데이트 후 캐시 비우기
+                        st.cache_data.clear()
+                        
                         st.success("✅ 삭제 완료!")
                         time.sleep(1)
                         st.rerun()
@@ -216,6 +230,10 @@ elif menu == "🏢 거래처 마스터 관리":
                     try:
                         df = conn.read(worksheet="거래처", ttl=0)
                         conn.update(worksheet="거래처", data=pd.concat([df, pd.DataFrame([{"거래처명":n, "사업자등록번호":b, "연락처1":p1, "연락처2":p2, "팩스번호":fax, "비고":rem}])], ignore_index=True))
+                        
+                        # 🚨 [업그레이드] 업데이트 후 캐시 비우기
+                        st.cache_data.clear()
+                        
                         st.success("✅ 등록 완료!")
                         time.sleep(1)
                         st.rerun()
@@ -239,6 +257,10 @@ elif menu == "🏢 거래처 마스터 관리":
                             idx = df.index[df['거래처명'] == target][0]
                             for col, val in zip(['거래처명','사업자등록번호','연락처1','연락처2','팩스번호','비고'], [n,b,p1,p2,fax,rem]): df.at[idx, col] = val
                             conn.update(worksheet="거래처", data=df)
+                            
+                            # 🚨 [업그레이드] 업데이트 후 캐시 비우기
+                            st.cache_data.clear()
+                            
                             st.success("✅ 업데이트 완료!")
                             time.sleep(1)
                             st.rerun()
@@ -263,6 +285,10 @@ elif menu == "📦 품목 마스터 관리":
                     try:
                         df = conn.read(worksheet="품목", ttl=0)
                         conn.update(worksheet="품목", data=pd.concat([df, pd.DataFrame([{"제품명":n, "주거래처":v, "단가":p}])], ignore_index=True))
+                        
+                        # 🚨 [업그레이드] 업데이트 후 캐시 비우기
+                        st.cache_data.clear()
+                        
                         st.success("✅ 등록 완료!")
                         time.sleep(1)
                         st.rerun()
@@ -296,6 +322,9 @@ elif menu == "📦 품목 마스터 관리":
                                     "변경단가": p
                                 }])
                                 conn.update(worksheet="단가이력", data=pd.concat([df_hist, new_hist], ignore_index=True))
+                            
+                            # 🚨 [업그레이드] 업데이트 후 캐시 비우기
+                            st.cache_data.clear()
                             
                             st.success("✅ 업데이트 완료!")
                             time.sleep(1.5)
