@@ -149,10 +149,10 @@ elif menu == "📝 매입 전표 입력":
             d = c1.date_input("매입 일자")
             v = c2.selectbox("거래처", df_v['거래처명'].tolist() if not df_v.empty else [])
             i = c3.selectbox("품목", df_i['제품명'].tolist() if not df_i.empty else [], key="item_select", on_change=on_item_change)
-            q = c4.number_input("수량", min_value=0, value=1)
+            q = c4.number_input("수량", value=1)
             
             c5, c6 = st.columns([1.5, 3.5])
-            p = c5.number_input("단가 (VAT별도)", min_value=0, value=st.session_state.price_input, key="price_input")
+            p = c5.number_input("단가 (VAT별도)", value=st.session_state.price_input, key="price_input")
             rem = c6.text_input("적요 (비고)")
             
             st.markdown("<br>", unsafe_allow_html=True)
